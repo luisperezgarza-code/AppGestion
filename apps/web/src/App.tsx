@@ -1,4 +1,8 @@
 import { useState, type ReactNode } from "react";
+import Finance from "./components/Finance";
+import Members from "./components/Members";
+import Staff from "./components/Staff";
+import "./components/modules.css";
 
 type IconName =
   | "overview"
@@ -595,7 +599,7 @@ function Dashboard() {
 function SectionPlaceholder({
   section,
 }: {
-  section: Exclude<SectionId, "overview">;
+  section: Exclude<SectionId, "overview" | "members" | "staff" | "finance">;
 }) {
   const content = sectionContent[section];
 
@@ -682,9 +686,17 @@ function App() {
         </header>
 
         <div className="page-content">
-          {activeSection === "overview" ? (
-            <Dashboard />
-          ) : (
+          {activeSection === "overview" && <Dashboard />}
+          <div hidden={activeSection !== "members"}>
+            <Members />
+          </div>
+          <div hidden={activeSection !== "finance"}>
+            <Finance />
+          </div>
+          <div hidden={activeSection !== "staff"}>
+            <Staff />
+          </div>
+          {(activeSection === "profile" || activeSection === "settings") && (
             <SectionPlaceholder section={activeSection} />
           )}
           <footer className="page-footer">
