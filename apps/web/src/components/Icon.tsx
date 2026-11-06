@@ -22,7 +22,10 @@ export type IconName =
   | "toggle"
   | "credit-card"
   | "user-plus"
-  | "close";
+  | "close"
+  | "delete"
+  | "sun"
+  | "moon";
 
 const icons: Record<IconName, ReactNode> = {
   overview: (
@@ -139,6 +142,19 @@ const icons: Record<IconName, ReactNode> = {
     </>
   ),
   close: <path d="m18 6-12 12M6 6l12 12" />,
+  delete: (
+    <>
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+      <path d="M10 11v5M14 11v5" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
+    </>
+  ),
+  moon: <path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" />,
 };
 
 export function Icon({

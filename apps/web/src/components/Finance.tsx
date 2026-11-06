@@ -1,5 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
+import { useLocalStorageState } from "./useLocalStorageState";
+import type { ToastType } from "./Toast";
 
 type Transaction = {
   id: number;
@@ -96,8 +98,36 @@ function isSameMonth(date: string, today: string) {
   return date.slice(0, 7) === today.slice(0, 7);
 }
 
-export default function Finance() {
-  const [transactions, setTransactions] = useState(initialTransactions);
+function isTransactionArray(value: unknown): value is Transaction[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (transaction) =>
+        typeof transaction === "object" &&
+        transaction !== null &&
+        typeof transaction.id === "number" &&
+        typeof transaction.client === "string" &&
+        typeof transaction.concept === "string" &&
+        typeof transaction.amount === "number" &&
+        typeof transaction.method === "string" &&
+        typeof transaction.date === "string" &&
+        (transaction.status === "Completado" ||
+          transaction.status === "Pendiente"),
+    )
+  );
+}
+
+export default function Finance({
+  onNotify,
+}: {
+  onNotify: (message: string, type?: ToastType) => void;
+}) {
+  const [transactions, setTransactions] = useLocalStorageState(
+    "appgestion.transactions",
+    initialTransactions,
+    isTransactionArray,
+    onNotify,
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const summary = useMemo(() => {
@@ -133,6 +163,14 @@ export default function Finance() {
     };
     setTransactions((current) => [transaction, ...current]);
     setIsFormOpen(false);
+    onNotify("El pago se registró correctamente.");
+  };
+
+  const deleteTransaction = (transaction: Transaction) => {
+    setTransactions((current) =>
+      current.filter((item) => item.id !== transaction.id),
+    );
+    onNotify(`La transacción de ${transaction.client} se eliminó.`);
   };
 
   return (
@@ -205,6 +243,7 @@ export default function Finance() {
                 <th>MÉTODO DE PAGO</th>
                 <th>FECHA</th>
                 <th>ESTADO</th>
+                <th>ACCIONES</th>
               </tr>
             </thead>
             <tbody>
@@ -233,6 +272,17 @@ export default function Finance() {
                       <span />
                       {transaction.status}
                     </span>
+                  </td>
+                  <td>
+                    <button
+                      aria-label={`Eliminar pago de ${transaction.client}`}
+                      className="row-action row-action-danger"
+                      onClick={() => deleteTransaction(transaction)}
+                      title="Eliminar transacción"
+                      type="button"
+                    >
+                      <Icon name="delete" size={16} />
+                    </button>
                   </td>
                 </tr>
               ))}

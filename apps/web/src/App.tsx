@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Finance from "./components/Finance";
+import { Toast, type ToastNotification, type ToastType } from "./components/Toast";
 import Members from "./components/Members";
 import Staff from "./components/Staff";
 import "./components/modules.css";
@@ -21,7 +22,9 @@ type IconName =
   | "more"
   | "plus"
   | "clock"
-  | "check";
+  | "check"
+  | "moon"
+  | "sun";
 
 type SectionId =
   | "overview"
@@ -132,6 +135,13 @@ const icons: Record<IconName, ReactNode> = {
   check: (
     <>
       <path d="m5 12 4 4L19 6" />
+    </>
+  ),
+  moon: <path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z" />,
+  sun: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" />
     </>
   ),
 };
@@ -628,6 +638,38 @@ function SectionPlaceholder({
 function App() {
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      return window.localStorage.getItem("appgestion.theme") === "dark";
+    } catch (error) {
+      console.error("No se pudo leer la preferencia del tema.", error);
+      return false;
+    }
+  });
+  const [notification, setNotification] = useState<ToastNotification | null>(
+    null,
+  );
+
+  const notify = useCallback(
+    (message: string, type: ToastType = "success") => {
+      setNotification({ id: Date.now(), message, type });
+    },
+    [],
+  );
+
+  const dismissNotification = useCallback(() => setNotification(null), []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "appgestion.theme",
+        isDarkMode ? "dark" : "light",
+      );
+    } catch (error) {
+      console.error("No se pudo guardar la preferencia del tema.", error);
+      notify("No se pudo guardar la preferencia de tema.", "error");
+    }
+  }, [isDarkMode, notify]);
 
   const navigateTo = (section: SectionId) => {
     setActiveSection(section);
@@ -635,7 +677,7 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isDarkMode ? " dark" : ""}`}>
       <Sidebar
         activeSection={activeSection}
         onNavigate={navigateTo}
@@ -662,6 +704,18 @@ function App() {
             </strong>
           </div>
           <div className="topbar-actions">
+            <button
+              aria-label={
+                isDarkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"
+              }
+              aria-pressed={isDarkMode}
+              className="icon-button theme-toggle"
+              onClick={() => setIsDarkMode((current) => !current)}
+              title={isDarkMode ? "Modo claro" : "Modo oscuro"}
+              type="button"
+            >
+              <Icon name={isDarkMode ? "sun" : "moon"} size={19} />
+            </button>
             <button aria-label="Buscar" className="icon-button search-button" type="button">
               <Icon name="search" size={19} />
             </button>
@@ -688,13 +742,13 @@ function App() {
         <div className="page-content">
           {activeSection === "overview" && <Dashboard />}
           <div hidden={activeSection !== "members"}>
-            <Members />
+            <Members onNotify={notify} />
           </div>
           <div hidden={activeSection !== "finance"}>
-            <Finance />
+            <Finance onNotify={notify} />
           </div>
           <div hidden={activeSection !== "staff"}>
-            <Staff />
+            <Staff onNotify={notify} />
           </div>
           {(activeSection === "profile" || activeSection === "settings") && (
             <SectionPlaceholder section={activeSection} />
@@ -705,6 +759,12 @@ function App() {
           </footer>
         </div>
       </main>
+      {notification && (
+        <Toast
+          notification={notification}
+          onDismiss={dismissNotification}
+        />
+      )}
     </div>
   );
 }

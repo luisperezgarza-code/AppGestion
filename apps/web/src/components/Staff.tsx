@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
+import { useLocalStorageState } from "./useLocalStorageState";
+import type { ToastType } from "./Toast";
 
 type Availability = "Disponible" | "En sesión" | "Fuera de horario";
 
@@ -63,8 +65,38 @@ const availabilityClass: Record<Availability, string> = {
   "Fuera de horario": "status-inactive",
 };
 
-export default function Staff() {
-  const [trainers, setTrainers] = useState(initialTrainers);
+function isTrainerArray(value: unknown): value is Trainer[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (trainer) =>
+        typeof trainer === "object" &&
+        trainer !== null &&
+        typeof trainer.id === "number" &&
+        typeof trainer.name === "string" &&
+        typeof trainer.email === "string" &&
+        typeof trainer.specialty === "string" &&
+        typeof trainer.schedule === "string" &&
+        typeof trainer.initials === "string" &&
+        typeof trainer.color === "string" &&
+        (trainer.availability === "Disponible" ||
+          trainer.availability === "En sesión" ||
+          trainer.availability === "Fuera de horario"),
+    )
+  );
+}
+
+export default function Staff({
+  onNotify,
+}: {
+  onNotify: (message: string, type?: ToastType) => void;
+}) {
+  const [trainers, setTrainers] = useLocalStorageState(
+    "appgestion.trainers",
+    initialTrainers,
+    isTrainerArray,
+    onNotify,
+  );
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const addTrainer = (event: FormEvent<HTMLFormElement>) => {
@@ -90,6 +122,12 @@ export default function Staff() {
     };
     setTrainers((current) => [trainer, ...current]);
     setIsFormOpen(false);
+    onNotify("El entrenador se agregó correctamente.");
+  };
+
+  const deleteTrainer = (trainer: Trainer) => {
+    setTrainers((current) => current.filter((item) => item.id !== trainer.id));
+    onNotify(`${trainer.name} se eliminó del personal.`);
   };
 
   return (
@@ -145,11 +183,22 @@ export default function Staff() {
               <span className={`trainer-avatar avatar-${trainer.color}`}>
                 {trainer.initials}
               </span>
-              <span
-                className={`status-badge ${availabilityClass[trainer.availability]}`}
-              >
-                <span />
-                {trainer.availability}
+              <span className="trainer-card-actions">
+                <span
+                  className={`status-badge ${availabilityClass[trainer.availability]}`}
+                >
+                  <span />
+                  {trainer.availability}
+                </span>
+                <button
+                  aria-label={`Eliminar a ${trainer.name}`}
+                  className="row-action row-action-danger"
+                  onClick={() => deleteTrainer(trainer)}
+                  title="Eliminar entrenador"
+                  type="button"
+                >
+                  <Icon name="delete" size={16} />
+                </button>
               </span>
             </div>
             <h2>{trainer.name}</h2>

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -1178,5 +1179,193 @@ button:focus-visible {
   .page-footer {
     gap: 8px;
     font-size: 8px;
+  }
+}
+
+.app-shell.dark {
+  min-height: 100vh;
+  background: #151622;
+  color: #e6e6ef;
+  color-scheme: dark;
+}
+
+.dark .sidebar,
+.dark .topbar {
+  border-color: #303143;
+  background: #1d1e2b;
+}
+
+.dark .brand-name,
+.dark .sidebar-user-name,
+.dark .topbar-profile-info,
+.dark .breadcrumb strong,
+.dark .page-heading h1,
+.dark .panel-heading h2,
+.dark .metric-value,
+.dark .revenue-total,
+.dark .section-placeholder h1 {
+  color: #e8e8f1;
+}
+
+.dark .sidebar-link {
+  color: #a7a8ba;
+}
+
+.dark .sidebar-link:hover,
+.dark .sidebar-link.active {
+  background: #2c2944;
+  color: #b7adff;
+}
+
+.dark .admin-badge {
+  border-color: #393452;
+  background: #29263a;
+  color: #b7adff;
+}
+
+.dark .sidebar-divider,
+.dark .sidebar-user,
+.dark .topbar-divider {
+  border-color: #303143;
+}
+
+.dark .sidebar-divider {
+  background: #303143;
+}
+
+.dark .sidebar-user,
+.dark .class-item,
+.dark .activity-item {
+  border-color: #303143;
+}
+
+.dark .main-content,
+.dark .page-content {
+  background: #151622;
+}
+
+.dark .metric-card,
+.dark .panel {
+  border-color: #303143;
+  background: #1d1e2b;
+  box-shadow: 0 2px 6px #00000012;
+}
+
+.dark .date-filter,
+.dark .icon-button:hover,
+.dark .mobile-menu-button:hover {
+  border-color: #393a4d;
+  background: #282938;
+  color: #c1b9ff;
+}
+
+.dark .date-filter {
+  border: 1px solid #393a4d;
+  color: #c2c2d0;
+}
+
+.dark .activity-name,
+.dark .class-name,
+.dark .class-time,
+.dark .class-instructor,
+.dark .class-status {
+  color: #d3d3df;
+}
+
+.dark .chart-grid {
+  stroke: #353647;
+}
+
+.dark .page-footer,
+.dark .page-description,
+.dark .panel-heading p,
+.dark .metric-label,
+.dark .metric-footnote,
+.dark .revenue-period,
+.dark .activity-detail,
+.dark .activity-time,
+.dark .class-meta,
+.dark .class-time span + span,
+.dark .section-placeholder-description,
+.dark .coming-soon {
+  color: #a1a2b3;
+}
+
+.dark .sidebar-close {
+  background: #2b2c3b;
+}
+
+.dark .sidebar-close span {
+  background: #babac9;
+}
+
+.app-toast {
+  position: fixed;
+  z-index: 80;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  min-height: 48px;
+  max-width: min(420px, calc(100vw - 32px));
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border: 1px solid #e8e8ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #4a4b60;
+  font-size: 11px;
+  box-shadow: 0 9px 28px #25243b20;
+  animation: toast-enter 180ms ease-out;
+}
+
+.toast-indicator {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #42a675;
+}
+
+.toast-error .toast-indicator {
+  background: #d75f68;
+}
+
+.toast-dismiss {
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #898a9b;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.toast-dismiss:hover {
+  background: #f2f2f6;
+}
+
+.dark .app-toast {
+  border-color: #3a3b4e;
+  background: #252635;
+  color: #e5e5ee;
+}
+
+.dark .toast-dismiss:hover {
+  background: #343546;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

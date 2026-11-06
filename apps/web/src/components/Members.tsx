@@ -1,5 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
+import { useLocalStorageState } from "./useLocalStorageState";
+import type { ToastType } from "./Toast";
 
 type MemberStatus = "Activo" | "Inactivo" | "Pendiente de Pago";
 
@@ -84,6 +86,26 @@ const statusClass: Record<MemberStatus, string> = {
   "Pendiente de Pago": "status-pending",
 };
 
+function isMemberArray(value: unknown): value is Member[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (member) =>
+        typeof member === "object" &&
+        member !== null &&
+        typeof member.id === "number" &&
+        typeof member.name === "string" &&
+        typeof member.email === "string" &&
+        typeof member.phone === "string" &&
+        typeof member.plan === "string" &&
+        typeof member.expiryDate === "string" &&
+        (member.status === "Activo" ||
+          member.status === "Inactivo" ||
+          member.status === "Pendiente de Pago"),
+    )
+  );
+}
+
 function formatDate(date: string) {
   if (!date) return "—";
   return new Intl.DateTimeFormat("es-MX", {
@@ -94,8 +116,17 @@ function formatDate(date: string) {
   }).format(new Date(`${date}T00:00:00Z`));
 }
 
-export default function Members() {
-  const [members, setMembers] = useState(initialMembers);
+export default function Members({
+  onNotify,
+}: {
+  onNotify: (message: string, type?: ToastType) => void;
+}) {
+  const [members, setMembers] = useLocalStorageState(
+    "appgestion.members",
+    initialMembers,
+    isMemberArray,
+    onNotify,
+  );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos los estados");
   const [editingMember, setEditingMember] = useState<Member | null>(null);
@@ -143,11 +174,13 @@ export default function Members() {
           member.id === editingMember.id ? { ...member, ...memberData } : member,
         ),
       );
+      onNotify("Los datos del miembro se actualizaron correctamente.");
     } else {
       setMembers((current) => [
         { id: Date.now(), ...memberData, status: "Activo" },
         ...current,
       ]);
+      onNotify("El nuevo miembro se registró correctamente.");
     }
     closeForm();
   };
@@ -160,6 +193,12 @@ export default function Members() {
         item.id === member.id ? { ...item, status: nextStatus } : item,
       ),
     );
+    onNotify(`Estado de ${member.name}: ${nextStatus}.`);
+  };
+
+  const deleteMember = (member: Member) => {
+    setMembers((current) => current.filter((item) => item.id !== member.id));
+    onNotify(`${member.name} se eliminó de la lista.`);
   };
 
   return (
@@ -278,6 +317,15 @@ export default function Members() {
                         type="button"
                       >
                         <Icon name="toggle" size={17} />
+                      </button>
+                      <button
+                        aria-label={`Eliminar ${member.name}`}
+                        className="row-action row-action-danger"
+                        onClick={() => deleteMember(member)}
+                        title="Eliminar miembro"
+                        type="button"
+                      >
+                        <Icon name="delete" size={16} />
                       </button>
                     </div>
                   </td>

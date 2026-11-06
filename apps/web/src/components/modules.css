@@ -784,3 +784,126 @@
     margin: 0 5px;
   }
 }
+
+.row-action-danger:hover {
+  background: #fff0f0;
+  color: #c45059;
+}
+
+.trainer-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.dark .module-heading h1,
+.dark .module-panel-heading h2,
+.dark .table-person-copy strong,
+.dark .table-primary-cell,
+.dark .finance-summary-card > strong,
+.dark .trainer-card h2,
+.dark .staff-summary-item strong,
+.dark .amount-cell {
+  color: #e8e8f1 !important;
+}
+
+.dark .module-description,
+.dark .module-count,
+.dark .module-panel-heading p,
+.dark .transaction-count,
+.dark .table-footer,
+.dark .table-person-copy span,
+.dark .muted-cell,
+.dark .trainer-email,
+.dark .trainer-schedule,
+.dark .trainer-specialty strong,
+.dark .summary-caption {
+  color: #a4a5b7 !important;
+}
+
+.dark .table-toolbar,
+.dark .module-panel-heading,
+.dark .data-table th,
+.dark .data-table td,
+.dark .table-footer,
+.dark .trainer-specialty,
+.dark .staff-summary-separator {
+  border-color: #343546;
+}
+
+.dark .data-table th {
+  background: #252635;
+  color: #a8a9ba;
+}
+
+.dark .data-table td {
+  color: #c5c5d2;
+}
+
+.dark .data-table tbody tr:hover {
+  background: #252635;
+}
+
+.dark .table-search,
+.dark .filter-select-wrap select,
+.dark .form-field input,
+.dark .form-field select,
+.dark .secondary-button {
+  border-color: #3a3b4e;
+  background: #252635;
+  color: #e2e2eb;
+}
+
+.dark .table-search input {
+  color: #e2e2eb;
+}
+
+.dark .table-search input::placeholder,
+.dark .form-field input::placeholder {
+  color: #9293a7;
+}
+
+.dark .filter-label,
+.dark .form-field label {
+  color: #b6b7c7;
+}
+
+.dark .filter-select-wrap select option,
+.dark .form-field select option {
+  background: #252635;
+  color: #e2e2eb;
+}
+
+.dark .form-modal {
+  border-color: #3a3b4e;
+  background: #1d1e2b;
+}
+
+.dark .modal-heading h2 {
+  color: #e8e8f1;
+}
+
+.dark .modal-close {
+  background: #2b2c3b;
+  color: #c2c2d0;
+}
+
+.dark .modal-actions {
+  border-color: #343546;
+}
+
+.dark .row-action-danger:hover {
+  background: #492d34;
+  color: #ff9a9f;
+}
+
+.dark .class-item {
+  border-color: #343546;
+}
+
+@media (max-width: 560px) {
+  .app-toast {
+    right: 16px;
+    bottom: 16px;
+  }
+}
