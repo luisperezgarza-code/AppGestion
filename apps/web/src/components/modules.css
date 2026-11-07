@@ -1103,6 +1103,29 @@
   color: #e8e8f1 !important;
 }
 
+.dark .staff-summary-row {
+  border-color: #3a3b4e;
+  background: rgb(30 41 59 / 78%);
+}
+
+.dark .staff-summary-item small {
+  color: #a8b1c2;
+}
+
+.dark .staff-summary-icon.staff-icon-violet {
+  background: #37315d;
+  color: #c4baff;
+}
+
+.dark .staff-availability-dot {
+  background: #64cf94;
+  box-shadow: 0 0 0 4px rgb(100 207 148 / 16%);
+}
+
+.dark .staff-summary-separator {
+  background: #44495a;
+}
+
 .dark .module-description,
 .dark .module-count,
 .dark .module-panel-heading p,
