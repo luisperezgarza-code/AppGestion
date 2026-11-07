@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcrypt";
 
 const tokenLifetimeSeconds = 8 * 60 * 60;
@@ -117,8 +117,4 @@ function verifySignedToken(token: string): TokenClaims | null {
   } catch {
     return null;
   }
-}
-
-export function hashResetToken(token: string) {
-  return createHash("sha256").update(token).digest("hex");
 }

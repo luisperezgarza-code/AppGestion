@@ -4,7 +4,12 @@ import { useLocalStorageState } from "./useLocalStorageState";
 import type { ToastType } from "./Toast";
 import { api, apiMode } from "../services/api";
 
-type Availability = "Disponible" | "En sesión" | "Fuera de horario";
+type Availability =
+  | "Disponible"
+  | "Vacaciones"
+  | "Incapacidad"
+  | "Fuera de servicio";
+type LegacyAvailability = "En sesión" | "Fuera de horario";
 
 type Trainer = {
   id: number | string;
@@ -12,7 +17,7 @@ type Trainer = {
   email: string;
   specialty: string;
   schedule: string;
-  availability: Availability;
+  availability: Availability | LegacyAvailability;
   initials: string;
   color: string;
 };
@@ -89,7 +94,7 @@ const initialTrainers: Trainer[] = [
     email: "sofia.martinez@appgestion.mx",
     specialty: "Yoga y movilidad",
     schedule: "Lun – Vie · 9:00 AM – 5:00 PM",
-    availability: "En sesión",
+    availability: "Vacaciones",
     initials: "SM",
     color: "peach",
   },
@@ -109,7 +114,7 @@ const initialTrainers: Trainer[] = [
     email: "laura.mendez@appgestion.mx",
     specialty: "Pilates",
     schedule: "Lun – Jue · 8:00 AM – 4:00 PM",
-    availability: "Fuera de horario",
+    availability: "Fuera de servicio",
     initials: "LM",
     color: "mint",
   },
@@ -117,9 +122,16 @@ const initialTrainers: Trainer[] = [
 
 const availabilityClass: Record<Availability, string> = {
   Disponible: "status-active",
-  "En sesión": "availability-busy",
-  "Fuera de horario": "status-inactive",
+  Vacaciones: "availability-vacation",
+  Incapacidad: "availability-leave",
+  "Fuera de servicio": "status-inactive",
 };
+
+function currentAvailability(value: Trainer["availability"]): Availability {
+  if (value === "En sesión") return "Disponible";
+  if (value === "Fuera de horario") return "Fuera de servicio";
+  return value;
+}
 
 function isTrainerArray(value: unknown): value is Trainer[] {
   return (
@@ -136,6 +148,9 @@ function isTrainerArray(value: unknown): value is Trainer[] {
         typeof trainer.initials === "string" &&
         typeof trainer.color === "string" &&
         (trainer.availability === "Disponible" ||
+          trainer.availability === "Vacaciones" ||
+          trainer.availability === "Incapacidad" ||
+          trainer.availability === "Fuera de servicio" ||
           trainer.availability === "En sesión" ||
           trainer.availability === "Fuera de horario"),
     )
@@ -167,6 +182,23 @@ export default function Staff({
     "Vie",
   ]);
   const [isSavingTrainer, setIsSavingTrainer] = useState(false);
+  useEffect(() => {
+    setTrainers((current) => {
+      if (
+        current.every(
+          (trainer) =>
+            trainer.availability !== "En sesión" &&
+            trainer.availability !== "Fuera de horario",
+        )
+      ) {
+        return current;
+      }
+      return current.map((trainer) => ({
+        ...trainer,
+        availability: currentAvailability(trainer.availability),
+      }));
+    });
+  }, [setTrainers]);
   useEffect(() => {
     if (apiMode !== "remote") return;
     let active = true;
@@ -221,13 +253,15 @@ export default function Staff({
       );
       return;
     }
-    const availability = String(formData.get("availability")) as Availability;
+    const password = String(formData.get("password") ?? "");
     const trainerData = {
       name,
       email: String(formData.get("email")).trim(),
       specialty: String(formData.get("specialty")).trim(),
       schedule: formatSchedule(days, startTime, endTime),
-      availability,
+      availability: editingTrainer
+        ? currentAvailability(editingTrainer.availability)
+        : "Disponible" as const,
       initials: name
         .split(/\s+/)
         .slice(0, 2)
@@ -240,7 +274,10 @@ export default function Staff({
       if (editingTrainer) {
         const updated =
           apiMode === "remote"
-            ? await api.staff.update(editingTrainer.id, trainerData)
+            ? await api.staff.update(editingTrainer.id, {
+                ...trainerData,
+                ...(password ? { password } : {}),
+              })
             : { ...editingTrainer, ...trainerData };
         setTrainers((current) =>
           current.map((item) =>
@@ -251,7 +288,10 @@ export default function Staff({
       } else {
         const trainer =
           apiMode === "remote"
-            ? await api.staff.create(trainerData)
+            ? await api.staff.create({
+                ...trainerData,
+                ...(password ? { password } : {}),
+              })
             : { id: Date.now(), ...trainerData };
         setTrainers((current) => [trainer, ...current]);
         onNotify("El entrenador se agregó correctamente.");
@@ -275,6 +315,30 @@ export default function Staff({
     } catch (error) {
       onNotify(
         error instanceof Error ? error.message : "No se pudo eliminar al entrenador.",
+        "error",
+      );
+    }
+  };
+
+  const changeAvailability = async (
+    trainer: Trainer,
+    availability: Availability,
+  ) => {
+    try {
+      const updated = await api.staff.update(trainer.id, { availability });
+      setTrainers((current) =>
+        current.map((item) =>
+          item.id === trainer.id
+            ? { ...item, availability: updated.availability }
+            : item,
+        ),
+      );
+      onNotify(`Disponibilidad de ${trainer.name} actualizada.`);
+    } catch (error) {
+      onNotify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la disponibilidad.",
         "error",
       );
     }
@@ -334,12 +398,27 @@ export default function Staff({
                 {trainer.initials}
               </span>
               <span className="trainer-card-actions">
-                <span
-                  className={`status-badge ${availabilityClass[trainer.availability]}`}
+                <label
+                  className={`status-badge trainer-status-control ${availabilityClass[currentAvailability(trainer.availability)]}`}
                 >
                   <span />
-                  {trainer.availability}
-                </span>
+                  <select
+                    aria-label={`Cambiar disponibilidad de ${trainer.name}`}
+                    className="trainer-status-select"
+                    onChange={(event) =>
+                      changeAvailability(
+                        trainer,
+                        event.target.value as Availability,
+                      )
+                    }
+                    value={currentAvailability(trainer.availability)}
+                  >
+                    <option>Disponible</option>
+                    <option>Vacaciones</option>
+                    <option>Incapacidad</option>
+                    <option>Fuera de servicio</option>
+                  </select>
+                </label>
                 <button
                   aria-label={`Editar a ${trainer.name}`}
                   className="row-action"
@@ -435,6 +514,25 @@ export default function Staff({
                   defaultValue={editingTrainer?.specialty ?? ""}
                 />
               </div>
+              {apiMode === "remote" && (
+                <div className="form-field">
+                  <label htmlFor="trainer-password">
+                    Contraseña de acceso (opcional)
+                  </label>
+                  <input
+                    autoComplete="new-password"
+                    id="trainer-password"
+                    maxLength={72}
+                    minLength={10}
+                    name="password"
+                    placeholder="Mínimo 10 caracteres"
+                    type="password"
+                  />
+                  <small>
+                    Al guardarla, crea o actualiza el acceso del entrenador.
+                  </small>
+                </div>
+              )}
               <div className="form-field">
                 <label htmlFor="trainer-shift">Turno asignado</label>
                 <select
@@ -508,18 +606,6 @@ export default function Staff({
                   ))}
                 </div>
               </fieldset>
-              <div className="form-field">
-                <label htmlFor="trainer-availability">Disponibilidad</label>
-                <select
-                  defaultValue={editingTrainer?.availability ?? "Disponible"}
-                  id="trainer-availability"
-                  name="availability"
-                >
-                  <option>Disponible</option>
-                  <option>En sesión</option>
-                  <option>Fuera de horario</option>
-                </select>
-              </div>
               <div className="modal-actions">
                 <button
                   className="secondary-button"

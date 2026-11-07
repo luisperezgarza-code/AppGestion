@@ -51,7 +51,7 @@ export type TrainerRecord = {
   email: string;
   specialty: string;
   schedule: string;
-  availability: "Disponible" | "En sesión" | "Fuera de horario";
+  availability: "Disponible" | "Vacaciones" | "Incapacidad" | "Fuera de servicio";
   initials: string;
   color: string;
 };
@@ -71,6 +71,9 @@ export type AccountProfile = {
   phone: string;
   avatar: string;
 };
+
+type TrainerInput = Omit<TrainerRecord, "id"> & { password?: string };
+type TrainerUpdate = Partial<TrainerRecord> & { password?: string };
 
 const apiBaseUrl =
   (import.meta.env.VITE_API_URL as string | undefined) ??
@@ -238,6 +241,11 @@ type LocalAccount = {
   role?: AppUser["role"];
 };
 
+const staffCollection = remoteCollection<TrainerRecord>(
+  "/staff",
+  "appgestion.trainers",
+);
+
 export const api = {
   auth: {
     async login(email: string, password: string): Promise<Session | LoginChallenge> {
@@ -270,18 +278,6 @@ export const api = {
       };
       setAccessToken(session.token);
       return session;
-    },
-    async forgotPassword(email: string) {
-      return request<{ message: string }>("/auth/forgot-password", {
-        method: "POST",
-        body: JSON.stringify({ email }),
-      });
-    },
-    async resetPassword(token: string, password: string) {
-      return request<{ message: string }>("/auth/reset-password", {
-        method: "POST",
-        body: JSON.stringify({ token, password }),
-      });
     },
     async verifyLoginCode(code: string, challengeToken: string) {
       const session = await request<Session>("/auth/2fa/verify", {
@@ -361,7 +357,33 @@ export const api = {
     "/finance",
     "appgestion.transactions",
   ),
-  staff: remoteCollection<TrainerRecord>("/staff", "appgestion.trainers"),
+  staff: {
+    ...staffCollection,
+    async create(value: TrainerInput) {
+      const { password, ...trainer } = value;
+      if (apiMode === "local") return staffCollection.create(trainer);
+      const response = await request<{ data: TrainerRecord }>("/staff", {
+        method: "POST",
+        body: JSON.stringify({
+          ...trainer,
+          ...(password ? { password } : {}),
+        }),
+      });
+      return response.data;
+    },
+    async update(id: string | number, value: TrainerUpdate) {
+      const { password, ...trainer } = value;
+      if (apiMode === "local") return staffCollection.update(id, trainer);
+      const response = await request<{ data: TrainerRecord }>(`/staff/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...trainer,
+          ...(password ? { password } : {}),
+        }),
+      });
+      return response.data;
+    },
+  },
   classes: remoteCollection<ClassRecord>("/classes", "appgestion.classes"),
   users: {
     async updateProfile(profile: AccountProfile) {

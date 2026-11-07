@@ -1,12 +1,9 @@
-import { randomBytes } from "node:crypto";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 import QRCode from "qrcode";
 import speakeasy from "speakeasy";
 import { database } from "../config/database.js";
-import { sendPasswordResetEmail } from "../config/delivery.js";
 import {
   hashPassword,
-  hashResetToken,
   signAccessToken,
   signPurposeToken,
   verifyAccessToken,
@@ -170,77 +167,6 @@ export const login = asyncHandler(async (request, response) => {
     user: publicUser(user),
   });
 });
-
-  export const forgotPassword = asyncHandler(async (request, response) => {
-    if (!isRecord(request.body) || !isString(request.body.email, 3, 254)) {
-      response.status(400).json({ error: "Ingresa un correo electrónico válido." });
-      return;
-    }
-    const email = request.body.email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      response.status(400).json({ error: "Ingresa un correo electrónico válido." });
-      return;
-    }
-    const [users] = await database.execute<Array<RowDataPacket & { id: number; email: string }>>(
-      "SELECT id, email FROM users WHERE email = ? LIMIT 1",
-      [email],
-    );
-    const user = users[0];
-    if (user) {
-      const token = randomBytes(32).toString("hex");
-      await database.execute(
-        `UPDATE users SET reset_password_token = ?,
-         reset_password_expires = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 1 HOUR)
-         WHERE id = ?`,
-        [hashResetToken(token), user.id],
-      );
-      const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
-      const resetUrl = `${frontendUrl.replace(/\/$/, "")}/reset-password?token=${encodeURIComponent(token)}`;
-      try {
-        await sendPasswordResetEmail(user.email, resetUrl);
-      } catch (error) {
-        await database.execute(
-          "UPDATE users SET reset_password_token = NULL, reset_password_expires = NULL WHERE id = ?",
-          [user.id],
-        );
-        throw error;
-      }
-    }
-    response.json({
-      message: "Si existe una cuenta con ese correo, recibirás instrucciones para restablecer la contraseña.",
-    });
-  });
-
-  export const resetPassword = asyncHandler(async (request, response) => {
-    if (
-      !isRecord(request.body) ||
-      !isString(request.body.token, 32, 256) ||
-      typeof request.body.password !== "string" ||
-      request.body.password.length < 10 ||
-      request.body.password.length > 72
-    ) {
-      response.status(400).json({
-        error: "El enlace o la contraseña no son válidos. Usa una contraseña de 10 a 72 caracteres.",
-      });
-      return;
-    }
-    const [result] = await database.execute<ResultSetHeader>(
-      `UPDATE users SET password_hash = ?, reset_password_token = NULL,
-       reset_password_expires = NULL WHERE reset_password_token = ?
-       AND reset_password_expires > UTC_TIMESTAMP()`,
-      [
-        await hashPassword(request.body.password),
-        hashResetToken(request.body.token),
-      ],
-    );
-    if (result.affectedRows === 0) {
-      response.status(400).json({
-        error: "El enlace de recuperación no es válido o ya expiró.",
-      });
-      return;
-    }
-    response.json({ message: "Tu contraseña se actualizó. Ya puedes iniciar sesión." });
-  });
 
   export const setupTwoFactor = asyncHandler(async (request, response) => {
     const userId = request.authUserId;

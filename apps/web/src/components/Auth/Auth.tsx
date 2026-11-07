@@ -13,27 +13,19 @@ export default function Auth({
   onAuthenticated: (session: Session) => void;
   initialError?: string;
 }) {
-  const [mode, setMode] = useState<"login" | "register" | "forgot">("login");
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [errorMessage, setErrorMessage] = useState(initialError);
-  const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setErrorMessage("");
-    setSuccessMessage("");
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim();
 
     try {
-      if (mode === "forgot") {
-        const result = await api.auth.forgotPassword(email);
-        setSuccessMessage(result.message);
-        return;
-      }
-
       const password = String(formData.get("password") ?? "");
       if (challenge) {
         const session = await api.auth.verifyLoginCode(
@@ -68,11 +60,9 @@ export default function Auth({
 
   const title = challenge
     ? "Verifica tu identidad"
-    : mode === "forgot"
-      ? "Recupera tu contraseña"
-      : mode === "login"
-        ? "Bienvenido de nuevo"
-        : "Crea tu cuenta";
+    : mode === "login"
+      ? "Bienvenido de nuevo"
+      : "Crea tu cuenta";
 
   return (
     <main className="auth-page">
@@ -94,14 +84,12 @@ export default function Auth({
         <p className="auth-description">
           {challenge
             ? "Abre tu aplicación Authenticator e ingresa el código actual."
-            : mode === "forgot"
-              ? "Te enviaremos instrucciones si existe una cuenta con ese correo."
-              : mode === "login"
-                ? "Inicia sesión para administrar tu negocio."
-                : "Registra una cuenta para comenzar a gestionar tu negocio."}
+            : mode === "login"
+              ? "Inicia sesión para administrar tu negocio."
+              : "Registra una cuenta para comenzar a gestionar tu negocio."}
         </p>
 
-        {!challenge && mode !== "forgot" && (
+        {!challenge && (
           <div aria-label="Tipo de acceso" className="auth-tabs" role="tablist">
             <button
               aria-selected={mode === "login"}
@@ -144,12 +132,12 @@ export default function Auth({
               />
             </div>
           )}
-          {(!challenge || mode === "forgot") && (
+          {!challenge && (
             <div className="form-field">
               <label htmlFor="auth-email">Correo electrónico</label>
               <input
                 autoComplete="email"
-                autoFocus={mode === "login" || mode === "forgot"}
+                autoFocus={mode === "login"}
                 id="auth-email"
                 name="email"
                 placeholder="nombre@correo.com"
@@ -158,7 +146,7 @@ export default function Auth({
               />
             </div>
           )}
-          {!challenge && mode !== "forgot" && (
+          {!challenge && (
             <div className="form-field">
               <label htmlFor="auth-password">Contraseña</label>
               <input
@@ -197,11 +185,6 @@ export default function Auth({
               {errorMessage}
             </p>
           )}
-          {successMessage && (
-            <p className="auth-success" role="status">
-              {successMessage}
-            </p>
-          )}
           <button
             className="primary-button auth-submit"
             disabled={isSubmitting}
@@ -210,36 +193,20 @@ export default function Auth({
             {isSubmitting
               ? "Procesando..."
               : challenge
-                ? "Verificar código"
-                : mode === "forgot"
-                  ? "Enviar enlace"
+                  ? "Verificar código"
                   : mode === "login"
                     ? "Iniciar sesión"
                     : "Crear cuenta"}
           </button>
         </form>
 
-        {mode === "login" && !challenge && (
-          <button
-            className="auth-text-link"
-            onClick={() => {
-              setMode("forgot");
-              setErrorMessage("");
-              setSuccessMessage("");
-            }}
-            type="button"
-          >
-            ¿Olvidaste tu contraseña?
-          </button>
-        )}
-        {(mode === "forgot" || challenge) && (
+        {challenge && (
           <button
             className="auth-text-link"
             onClick={() => {
               setMode("login");
               setChallenge(null);
               setErrorMessage("");
-              setSuccessMessage("");
             }}
             type="button"
           >

@@ -257,9 +257,35 @@
   color: #c7883f;
 }
 
-.availability-busy {
-  background: #edf3ff;
-  color: #4e79bc;
+.availability-vacation {
+  background: #fff4e7;
+  color: #c7883f;
+}
+
+.availability-leave {
+  background: #fff7d9;
+  color: #9c7a19;
+}
+
+.trainer-status-control {
+  cursor: pointer;
+}
+
+.trainer-status-select {
+  max-width: 105px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  appearance: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.trainer-status-select option {
+  background: #fff;
+  color: #383746;
 }
 
 .row-actions {
