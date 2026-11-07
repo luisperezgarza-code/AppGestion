@@ -1,35 +1,35 @@
 import cors from "cors";
 import express, { type ErrorRequestHandler } from "express";
-import mongoose from "mongoose";
+import classesRouter from "./routes/classes.js";
 import financeRouter from "./routes/finance.js";
+import authRouter from "./routes/auth.js";
 import healthRouter from "./routes/health.js";
 import membersRouter from "./routes/members.js";
 import staffRouter from "./routes/staff.js";
+import usersRouter from "./routes/users.js";
 
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "3mb" }));
 app.use("/api/health", healthRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/users", usersRouter);
 app.use("/api/members", membersRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/staff", staffRouter);
+app.use("/api/classes", classesRouter);
 
 app.use((_request, response) => {
   response.status(404).json({ error: "No se encontró el recurso solicitado." });
 });
 
 const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
-  if (error instanceof mongoose.Error.ValidationError) {
-    response.status(400).json({ error: error.message });
-    return;
-  }
-
   if (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    error.code === 11000
+    error.code === "ER_DUP_ENTRY"
   ) {
     response.status(409).json({ error: "Ya existe un registro con esos datos." });
     return;

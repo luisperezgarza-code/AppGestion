@@ -1,9 +1,20 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import Account from "./components/Account";
+import Auth from "./components/Auth/Auth";
 import Finance from "./components/Finance";
 import { Toast, type ToastNotification, type ToastType } from "./components/Toast";
 import Members from "./components/Members";
+import Settings from "./components/Settings";
 import Staff from "./components/Staff";
 import "./components/modules.css";
+import {
+  api,
+  apiMode,
+  type AppUser,
+  type MemberRecord,
+  type Session,
+  type TransactionRecord,
+} from "./services/api";
 
 type IconName =
   | "overview"
@@ -33,6 +44,21 @@ type SectionId =
   | "finance"
   | "profile"
   | "settings";
+
+function roleLabel(role: AppUser["role"]) {
+  switch (role) {
+    case "receptionist":
+      return "Recepcionista";
+    case "trainer":
+      return "Entrenador";
+    default:
+      return "Propietario";
+  }
+}
+
+function roleModeLabel(role: AppUser["role"]) {
+  return role === "owner" ? "Modo Administrador" : `Modo ${roleLabel(role)}`;
+}
 
 const icons: Record<IconName, ReactNode> = {
   overview: (
@@ -312,11 +338,15 @@ function Sidebar({
   onNavigate,
   isOpen,
   onClose,
+  user,
+  onLogout,
 }: {
   activeSection: SectionId;
   onNavigate: (section: SectionId) => void;
   isOpen: boolean;
   onClose: () => void;
+  user: AppUser;
+  onLogout: () => void;
 }) {
   const renderNavigation = (
     items: { id: SectionId; label: string; icon: IconName }[],
@@ -369,7 +399,7 @@ function Sidebar({
 
         <div className="admin-badge">
           <span className="admin-badge-dot" />
-          Modo Administrador
+          {roleModeLabel(user.role)}
         </div>
 
         <nav aria-label="Navegación principal" className="sidebar-navigation">
@@ -380,18 +410,32 @@ function Sidebar({
         <div className="sidebar-bottom">
           <p className="nav-label">PREFERENCIAS</p>
           {renderNavigation(secondaryNavigation)}
-          <div className="sidebar-divider" />
-          <button className="sidebar-link logout-link" type="button">
-            <Icon name="logout" size={19} />
-            <span>Cerrar sesión</span>
-          </button>
           <div className="sidebar-user">
-            <div className="avatar avatar-owner">LP</div>
+            {user.avatar ? (
+              <img alt="" className="avatar sidebar-avatar-image" src={user.avatar} />
+            ) : (
+              <div className="avatar avatar-owner">
+                {user.name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0] ?? "")
+                  .join("")
+                  .toLocaleUpperCase("es-MX")}
+              </div>
+            )}
             <div className="sidebar-user-info">
-              <span className="sidebar-user-name">Luis Pérez</span>
-              <span className="sidebar-user-role">Propietario</span>
+              <span className="sidebar-user-name">{user.name}</span>
+              <span className="sidebar-user-role">{roleLabel(user.role)}</span>
             </div>
-            <Icon className="user-more" name="more" size={19} />
+            <button
+              aria-label="Cerrar sesión"
+              className="sidebar-user-logout"
+              onClick={onLogout}
+              title="Cerrar sesión"
+              type="button"
+            >
+              <Icon name="logout" size={17} />
+            </button>
           </div>
         </div>
       </aside>
@@ -606,38 +650,149 @@ function Dashboard() {
   );
 }
 
-function SectionPlaceholder({
-  section,
-}: {
-  section: Exclude<SectionId, "overview" | "members" | "staff" | "finance">;
-}) {
-  const content = sectionContent[section];
+function App() {
+  const [session, setSession] = useState<Session | null>(() => {
+    try {
+      const stored = window.localStorage.getItem("appgestion.session");
+      if (!stored) return null;
+      const value: unknown = JSON.parse(stored);
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        "token" in value &&
+        typeof value.token === "string" &&
+        "user" in value &&
+        typeof value.user === "object" &&
+        value.user !== null &&
+        "id" in value.user &&
+        typeof value.user.id === "string" &&
+        "name" in value.user &&
+        typeof value.user.name === "string" &&
+        "email" in value.user &&
+        typeof value.user.email === "string"
+      ) {
+        return {
+          token: value.token,
+          user: {
+            id: value.user.id,
+            name: value.user.name,
+            email: value.user.email,
+            role:
+              "role" in value.user &&
+              (value.user.role === "owner" ||
+                value.user.role === "receptionist" ||
+                value.user.role === "trainer")
+                ? value.user.role
+                : "owner",
+            phone:
+              "phone" in value.user && typeof value.user.phone === "string"
+                ? value.user.phone
+                : undefined,
+            avatar:
+              "avatar" in value.user && typeof value.user.avatar === "string"
+                ? value.user.avatar
+                : undefined,
+          },
+        };
+      }
+      throw new Error("El formato de sesión guardada no es válido.");
+    } catch (error) {
+      console.error("No se pudo leer la sesión guardada.", error);
+      return null;
+    }
+  });
+  const [isCheckingSession, setIsCheckingSession] = useState(
+    apiMode === "remote" && Boolean(session),
+  );
+  const [authError, setAuthError] = useState("");
+
+  useEffect(() => {
+    if (apiMode !== "remote" || !session) return;
+    api.auth
+      .currentUser()
+      .then((user) => {
+        const validSession = { ...session, user };
+        setSession(validSession);
+        window.localStorage.setItem(
+          "appgestion.session",
+          JSON.stringify(validSession),
+        );
+      })
+      .catch((error: unknown) => {
+        console.error("No se pudo validar la sesión.", error);
+        api.auth.logout();
+        window.localStorage.removeItem("appgestion.session");
+        setSession(null);
+        setAuthError(
+          error instanceof Error ? error.message : "La sesión expiró.",
+        );
+      })
+      .finally(() => setIsCheckingSession(false));
+  }, []);
+
+  const handleAuthenticated = (newSession: Session) => {
+    try {
+      window.localStorage.setItem(
+        "appgestion.session",
+        JSON.stringify(newSession),
+      );
+      setSession(newSession);
+      setAuthError("");
+    } catch (error) {
+      console.error("No se pudo guardar la sesión.", error);
+      throw new Error("No se pudo guardar la sesión en este dispositivo.");
+    }
+  };
+
+  const handleLogout = () => {
+    api.auth.logout();
+    window.localStorage.removeItem("appgestion.session");
+    setSession(null);
+  };
+
+  if (isCheckingSession) {
+    return (
+      <main className="auth-page">
+        <p className="auth-description">Verificando sesión...</p>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return <Auth onAuthenticated={handleAuthenticated} initialError={authError} />;
+  }
 
   return (
-    <section className="section-placeholder">
-      <div className={`section-placeholder-icon section-icon-${section}`}>
-        <Icon name={content.icon} size={26} />
-      </div>
-      <p className="eyebrow">ADMINISTRACIÓN</p>
-      <h1>{content.title}</h1>
-      <p className="section-placeholder-description">{content.description}</p>
-      <button className="primary-button" type="button">
-        <Icon name="plus" size={17} />
-        {content.action}
-      </button>
-      <div className="coming-soon">
-        <span className="coming-soon-check">
-          <Icon name="check" size={15} />
-        </span>
-        <span>Esta sección estará disponible próximamente.</span>
-      </div>
-    </section>
+    <AdminDashboard
+      session={session}
+      onLogout={handleLogout}
+      onSessionUpdated={handleAuthenticated}
+    />
   );
 }
 
-function App() {
+function AdminDashboard({
+  session,
+  onLogout,
+  onSessionUpdated,
+}: {
+  session: Session;
+  onLogout: () => void;
+  onSessionUpdated: (session: Session) => void;
+}) {
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMembers, setSearchMembers] = useState<MemberRecord[]>([]);
+  const [searchTransactions, setSearchTransactions] = useState<
+    TransactionRecord[]
+  >([]);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<
+    { id: string; title: string; detail: string; tone: string }[]
+  >([]);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       return window.localStorage.getItem("appgestion.theme") === "dark";
@@ -659,6 +814,142 @@ function App() {
 
   const dismissNotification = useCallback(() => setNotification(null), []);
 
+  const navigateTo = (section: SectionId) => {
+    setActiveSection(section);
+    setIsSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    if (!isSearchOpen || !searchQuery.trim()) {
+      setSearchMembers([]);
+      setSearchTransactions([]);
+      return;
+    }
+    let active = true;
+    const query = searchQuery.trim().toLocaleLowerCase("es-MX");
+    Promise.all([api.members.list(), api.finance.list()])
+      .then(([members, transactions]) => {
+        if (!active) return;
+        setSearchMembers(
+          members
+            .filter(
+              (member) =>
+                member.name.toLocaleLowerCase("es-MX").includes(query) ||
+                member.email.toLocaleLowerCase("es-MX").includes(query),
+            )
+            .slice(0, 5),
+        );
+        setSearchTransactions(
+          transactions
+            .filter(
+              (transaction) =>
+                transaction.client.toLocaleLowerCase("es-MX").includes(query) ||
+                transaction.concept.toLocaleLowerCase("es-MX").includes(query),
+            )
+            .slice(0, 5),
+        );
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          notify(
+            error instanceof Error
+              ? error.message
+              : "No se pudo completar la búsqueda.",
+            "error",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isSearchOpen, notify, searchQuery]);
+
+  const loadNotifications = async () => {
+    try {
+      const [members, transactions] = await Promise.all([
+        api.members.list(),
+        api.finance.list(),
+      ]);
+      const today = new Date();
+      const upcoming = members
+        .map((member) => {
+          const expiry = new Date(`${member.expiryDate}T00:00:00`);
+          const daysUntil = Math.ceil(
+            (expiry.getTime() - today.getTime()) / 86_400_000,
+          );
+          return { member, daysUntil };
+        })
+        .filter(({ member, daysUntil }) => {
+          const enabled = window.localStorage.getItem("appgestion.settings");
+          const notifyEnabled =
+            !enabled ||
+            (JSON.parse(enabled) as { notifyExpiringMemberships?: boolean })
+              .notifyExpiringMemberships !== false;
+          return (
+            notifyEnabled &&
+            member.status === "Activo" &&
+            daysUntil >= 0 &&
+            daysUntil <= 30
+          );
+        })
+        .slice(0, 4)
+        .map(({ member, daysUntil }) => ({
+          id: `member-${member.id}`,
+          title: "Membresía próxima a vencer",
+          detail: `${member.name} · vence en ${daysUntil} día${daysUntil === 1 ? "" : "s"}`,
+          tone: "notification-warning",
+        }));
+      const settings = window.localStorage.getItem("appgestion.settings");
+      const paymentsEnabled =
+        !settings ||
+        (JSON.parse(settings) as { notifyPayments?: boolean }).notifyPayments !==
+          false;
+      const recentPayments = paymentsEnabled
+        ? transactions
+            .filter((transaction) => {
+              const age = Math.floor(
+                (today.getTime() -
+                  new Date(`${transaction.date}T00:00:00`).getTime()) /
+                  86_400_000,
+              );
+              return age >= 0 && age < 3;
+            })
+            .slice(0, 4)
+            .map((transaction) => ({
+              id: `transaction-${transaction.id}`,
+              title: "Pago registrado",
+              detail: `${transaction.client} · $${transaction.amount.toLocaleString("es-MX")}`,
+              tone: "notification-success",
+            }))
+        : [];
+      setNotifications([...recentPayments, ...upcoming].slice(0, 7));
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar las notificaciones.",
+        "error",
+      );
+    }
+  };
+
+  const toggleNotifications = () => {
+    const shouldOpen = !isNotificationsOpen;
+    setIsNotificationsOpen(shouldOpen);
+    setIsProfileMenuOpen(false);
+    setIsSearchOpen(false);
+    if (shouldOpen) void loadNotifications();
+  };
+
+  const navigateFromProfile = (section: SectionId) => {
+    navigateTo(section);
+    setIsProfileMenuOpen(false);
+  };
+
+  const updateSessionUser = (user: AppUser) => {
+    onSessionUpdated({ ...session, user });
+  };
+
   useEffect(() => {
     try {
       window.localStorage.setItem(
@@ -671,11 +962,6 @@ function App() {
     }
   }, [isDarkMode, notify]);
 
-  const navigateTo = (section: SectionId) => {
-    setActiveSection(section);
-    setIsSidebarOpen(false);
-  };
-
   return (
     <div className={`app-shell${isDarkMode ? " dark" : ""}`}>
       <Sidebar
@@ -683,6 +969,8 @@ function App() {
         onNavigate={navigateTo}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        user={session.user}
+        onLogout={onLogout}
       />
       <main className="main-content">
         <header className="topbar">
@@ -716,25 +1004,227 @@ function App() {
             >
               <Icon name={isDarkMode ? "sun" : "moon"} size={19} />
             </button>
-            <button aria-label="Buscar" className="icon-button search-button" type="button">
-              <Icon name="search" size={19} />
-            </button>
-            <button
-              aria-label="Notificaciones"
-              className="icon-button notification-button"
-              type="button"
-            >
-              <Icon name="bell" size={19} />
-              <span className="notification-dot" />
-            </button>
+            <div className="topbar-popover-wrap search-popover-wrap">
+              <button
+                aria-expanded={isSearchOpen}
+                aria-label="Buscar"
+                className="icon-button search-button"
+                onClick={() => {
+                  setIsSearchOpen((open) => !open);
+                  setIsNotificationsOpen(false);
+                  setIsProfileMenuOpen(false);
+                }}
+                type="button"
+              >
+                <Icon name="search" size={19} />
+              </button>
+              {isSearchOpen && (
+                <div className="topbar-popover global-search-popover">
+                  <label className="table-search global-search-input">
+                    <Icon name="search" size={17} />
+                    <input
+                      autoFocus
+                      aria-label="Buscar miembros o transacciones"
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Buscar miembros o transacciones..."
+                      type="search"
+                      value={searchQuery}
+                    />
+                    <button
+                      aria-label="Cerrar búsqueda"
+                      className="popover-close"
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setSearchQuery("");
+                      }}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </label>
+                  {searchQuery.trim() ? (
+                    <div className="global-search-results">
+                      {searchMembers.length > 0 && (
+                        <>
+                          <p className="popover-section-label">MIEMBROS</p>
+                          {searchMembers.map((member) => (
+                            <button
+                              className="global-search-result"
+                              key={`member-${member.id}`}
+                              onClick={() => {
+                                navigateTo("members");
+                                setSearchQuery(member.name);
+                                setIsSearchOpen(false);
+                              }}
+                              type="button"
+                            >
+                              <span className="search-result-icon">
+                                <Icon name="members" size={16} />
+                              </span>
+                              <span>
+                                <strong>{member.name}</strong>
+                                <small>{member.email}</small>
+                              </span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {searchTransactions.length > 0 && (
+                        <>
+                          <p className="popover-section-label">TRANSACCIONES</p>
+                          {searchTransactions.map((transaction) => (
+                            <button
+                              className="global-search-result"
+                              key={`transaction-${transaction.id}`}
+                              onClick={() => {
+                                navigateTo("finance");
+                                setSearchQuery(
+                                  transaction.client || transaction.concept,
+                                );
+                                setIsSearchOpen(false);
+                              }}
+                              type="button"
+                            >
+                              <span className="search-result-icon search-result-finance">
+                                <Icon name="finance" size={16} />
+                              </span>
+                              <span>
+                                <strong>{transaction.client}</strong>
+                                <small>
+                                  {transaction.concept} · $
+                                  {transaction.amount.toLocaleString("es-MX")}
+                                </small>
+                              </span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {searchMembers.length === 0 &&
+                        searchTransactions.length === 0 && (
+                          <p className="popover-empty">
+                            No se encontraron coincidencias.
+                          </p>
+                        )}
+                    </div>
+                  ) : (
+                    <p className="search-hint">
+                      Busca por nombre, correo o concepto de pago.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="topbar-popover-wrap">
+              <button
+                aria-expanded={isNotificationsOpen}
+                aria-label="Notificaciones"
+                className="icon-button notification-button"
+                onClick={toggleNotifications}
+                type="button"
+              >
+                <Icon name="bell" size={19} />
+                {notifications.length > 0 && <span className="notification-dot" />}
+              </button>
+              {isNotificationsOpen && (
+                <div className="topbar-popover notifications-popover">
+                  <div className="popover-heading">
+                    <div>
+                      <strong>Notificaciones</strong>
+                      <small>Actividad reciente del negocio</small>
+                    </div>
+                    <button
+                      aria-label="Cerrar notificaciones"
+                      className="popover-close"
+                      onClick={() => setIsNotificationsOpen(false)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="notification-list">
+                    {notifications.length ? (
+                      notifications.map((item) => (
+                        <div className="notification-item" key={item.id}>
+                          <span className={`notification-item-icon ${item.tone}`}>
+                            <Icon
+                              name={
+                                item.tone === "notification-warning"
+                                  ? "clock"
+                                  : "check"
+                              }
+                              size={15}
+                            />
+                          </span>
+                          <span>
+                            <strong>{item.title}</strong>
+                            <small>{item.detail}</small>
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="popover-empty">No hay alertas recientes.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="topbar-divider" />
-            <div className="topbar-profile">
-              <div className="avatar avatar-owner">LP</div>
-              <div className="topbar-profile-info">
-                <span>Luis Pérez</span>
-                <span>Administrador</span>
-              </div>
-              <span className="profile-chevron" />
+            <div className="topbar-popover-wrap profile-popover-wrap">
+              <button
+                aria-expanded={isProfileMenuOpen}
+                aria-label="Menú de perfil"
+                className="topbar-profile profile-trigger"
+                onClick={() => {
+                  setIsProfileMenuOpen((open) => !open);
+                  setIsNotificationsOpen(false);
+                  setIsSearchOpen(false);
+                }}
+                type="button"
+              >
+                {session.user.avatar ? (
+                  <img
+                    alt=""
+                    className="avatar sidebar-avatar-image"
+                    src={session.user.avatar}
+                  />
+                ) : (
+                  <div className="avatar avatar-owner">
+                    {session.user.name
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map((part) => part[0] ?? "")
+                      .join("")
+                      .toLocaleUpperCase("es-MX")}
+                  </div>
+                )}
+                <div className="topbar-profile-info">
+                  <span>{session.user.name}</span>
+                  <span>{roleLabel(session.user.role)}</span>
+                </div>
+                <span className="profile-chevron" />
+              </button>
+              {isProfileMenuOpen && (
+                <div className="topbar-popover profile-menu">
+                  <div className="profile-menu-user">
+                    <strong>{session.user.name}</strong>
+                    <small>{session.user.email}</small>
+                  </div>
+                  <button
+                    onClick={() => navigateFromProfile("profile")}
+                    type="button"
+                  >
+                    <Icon name="profile" size={17} />
+                    Mi cuenta
+                  </button>
+                  <button
+                    onClick={() => navigateFromProfile("settings")}
+                    type="button"
+                  >
+                    <Icon name="settings" size={17} />
+                    Configuración
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -742,16 +1232,23 @@ function App() {
         <div className="page-content">
           {activeSection === "overview" && <Dashboard />}
           <div hidden={activeSection !== "members"}>
-            <Members onNotify={notify} />
+            <Members onNotify={notify} searchTerm={searchQuery} />
           </div>
           <div hidden={activeSection !== "finance"}>
-            <Finance onNotify={notify} />
+            <Finance onNotify={notify} searchTerm={searchQuery} />
           </div>
           <div hidden={activeSection !== "staff"}>
             <Staff onNotify={notify} />
           </div>
-          {(activeSection === "profile" || activeSection === "settings") && (
-            <SectionPlaceholder section={activeSection} />
+          {activeSection === "profile" && (
+            <Account
+              onNotify={notify}
+              onUserUpdated={updateSessionUser}
+              user={session.user}
+            />
+          )}
+          {activeSection === "settings" && (
+            <Settings onNotify={notify} />
           )}
           <footer className="page-footer">
             <span>© 2025 AppGestion</span>

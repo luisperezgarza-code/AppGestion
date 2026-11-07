@@ -1,13 +1,15 @@
 import { Router } from "express";
-import mongoose from "mongoose";
+import { database } from "../config/database.js";
 
 const healthRouter = Router();
 
-healthRouter.get("/", (_request, response) => {
-  response.json({
-    status: "ok",
-    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
-  });
+healthRouter.get("/", async (_request, response, next) => {
+  try {
+    await database.query("SELECT 1");
+    response.json({ status: "ok", database: "connected" });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default healthRouter;

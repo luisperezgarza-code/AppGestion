@@ -1,12 +1,14 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
 import { useLocalStorageState } from "./useLocalStorageState";
 import type { ToastType } from "./Toast";
+import { api, apiMode } from "../services/api";
+import { exportReport, type ExportFormat } from "../services/export";
 
 type MemberStatus = "Activo" | "Inactivo" | "Pendiente de Pago";
 
 type Member = {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
   phone: string;
@@ -118,19 +120,46 @@ function formatDate(date: string) {
 
 export default function Members({
   onNotify,
+  searchTerm = "",
 }: {
   onNotify: (message: string, type?: ToastType) => void;
+  searchTerm?: string;
 }) {
   const [members, setMembers] = useLocalStorageState(
     "appgestion.members",
-    initialMembers,
+    apiMode === "local" ? initialMembers : [],
     isMemberArray,
     onNotify,
+    apiMode === "local",
   );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("Todos los estados");
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
+  useEffect(() => {
+    if (apiMode !== "remote") return;
+    let active = true;
+    api.members
+      .list()
+      .then((data) => {
+        if (active) setMembers(data);
+      })
+      .catch((error: unknown) =>
+        onNotify(
+          error instanceof Error ? error.message : "No se pudieron cargar miembros.",
+          "error",
+        ),
+      );
+    return () => {
+      active = false;
+    };
+  }, [onNotify, setMembers]);
+
+  useEffect(() => {
+    setSearch(searchTerm);
+  }, [searchTerm]);
 
   const filteredMembers = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("es-MX");
@@ -157,7 +186,7 @@ export default function Members({
 
   const closeForm = () => setIsFormOpen(false);
 
-  const saveMember = (event: FormEvent<HTMLFormElement>) => {
+  const saveMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const memberData = {
@@ -168,37 +197,85 @@ export default function Members({
       expiryDate: String(formData.get("expiryDate")),
     };
 
-    if (editingMember) {
-      setMembers((current) =>
-        current.map((member) =>
-          member.id === editingMember.id ? { ...member, ...memberData } : member,
-        ),
+    try {
+      if (editingMember) {
+        const updated = { ...editingMember, ...memberData };
+        if (apiMode === "remote") {
+          await api.members.update(editingMember.id, memberData);
+        }
+        setMembers((current) =>
+          current.map((member) =>
+            member.id === editingMember.id ? updated : member,
+          ),
+        );
+        onNotify("Los datos del miembro se actualizaron correctamente.");
+      } else {
+        const member =
+          apiMode === "remote"
+            ? await api.members.create({ ...memberData, status: "Activo" })
+            : { id: Date.now(), ...memberData, status: "Activo" as const };
+        setMembers((current) => [member, ...current]);
+        onNotify("El nuevo miembro se registró correctamente.");
+      }
+      closeForm();
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo guardar el miembro.",
+        "error",
       );
-      onNotify("Los datos del miembro se actualizaron correctamente.");
-    } else {
-      setMembers((current) => [
-        { id: Date.now(), ...memberData, status: "Activo" },
-        ...current,
-      ]);
-      onNotify("El nuevo miembro se registró correctamente.");
     }
-    closeForm();
   };
 
-  const toggleMemberStatus = (member: Member) => {
+  const toggleMemberStatus = async (member: Member) => {
     const nextStatus: MemberStatus =
       member.status === "Activo" ? "Inactivo" : "Activo";
+    try {
+      if (apiMode === "remote") {
+        await api.members.update(member.id, { status: nextStatus });
+      }
     setMembers((current) =>
       current.map((item) =>
         item.id === member.id ? { ...item, status: nextStatus } : item,
       ),
     );
     onNotify(`Estado de ${member.name}: ${nextStatus}.`);
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo cambiar el estado.",
+        "error",
+      );
+    }
   };
 
-  const deleteMember = (member: Member) => {
-    setMembers((current) => current.filter((item) => item.id !== member.id));
-    onNotify(`${member.name} se eliminó de la lista.`);
+  const deleteMember = async (member: Member) => {
+    try {
+      if (apiMode === "remote") await api.members.remove(member.id);
+      setMembers((current) => current.filter((item) => item.id !== member.id));
+      onNotify(`${member.name} se eliminó de la lista.`);
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo eliminar al miembro.",
+        "error",
+      );
+    }
+  };
+
+  const exportMembers = (format: ExportFormat) => {
+    exportReport(
+      "miembros-appgestion",
+      ["Nombre", "Correo", "Teléfono", "Plan", "Vencimiento", "Estado"],
+      members.map((member) => [
+        member.name,
+        member.email,
+        member.phone,
+        member.plan,
+        formatDate(member.expiryDate),
+        member.status,
+      ]),
+      format,
+    );
+    setIsExportOpen(false);
+    onNotify(`Se exportó el reporte de miembros a ${format.toUpperCase()}.`);
   };
 
   return (
@@ -211,10 +288,33 @@ export default function Members({
             Administra las membresías y la información de tus clientes.
           </p>
         </div>
-        <button className="primary-button" onClick={openNewForm} type="button">
-          <Icon name="plus" size={17} />
-          Registrar nuevo miembro
-        </button>
+        <div className="module-heading-actions">
+          <div className="export-menu-wrap">
+            <button
+              aria-expanded={isExportOpen}
+              className="secondary-button export-trigger"
+              onClick={() => setIsExportOpen((open) => !open)}
+              type="button"
+            >
+              Exportar
+              <span className="filter-chevron" />
+            </button>
+            {isExportOpen && (
+              <div className="export-menu">
+                <button onClick={() => exportMembers("csv")} type="button">
+                  Descargar CSV
+                </button>
+                <button onClick={() => exportMembers("excel")} type="button">
+                  Descargar Excel
+                </button>
+              </div>
+            )}
+          </div>
+          <button className="primary-button" onClick={openNewForm} type="button">
+            <Icon name="plus" size={17} />
+            Registrar nuevo miembro
+          </button>
+        </div>
       </div>
 
       <div className="module-summary-row">

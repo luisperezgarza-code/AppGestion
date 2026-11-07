@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
 import { useLocalStorageState } from "./useLocalStorageState";
 import type { ToastType } from "./Toast";
+import { api, apiMode } from "../services/api";
 
 type Availability = "Disponible" | "En sesión" | "Fuera de horario";
 
 type Trainer = {
-  id: number;
+  id: number | string;
   name: string;
   email: string;
   specialty: string;
@@ -93,21 +94,39 @@ export default function Staff({
 }) {
   const [trainers, setTrainers] = useLocalStorageState(
     "appgestion.trainers",
-    initialTrainers,
+    apiMode === "local" ? initialTrainers : [],
     isTrainerArray,
     onNotify,
+    apiMode === "local",
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
+  useEffect(() => {
+    if (apiMode !== "remote") return;
+    let active = true;
+    api.staff
+      .list()
+      .then((data) => {
+        if (active) setTrainers(data);
+      })
+      .catch((error: unknown) =>
+        onNotify(
+          error instanceof Error ? error.message : "No se pudo cargar el personal.",
+          "error",
+        ),
+      );
+    return () => {
+      active = false;
+    };
+  }, [onNotify, setTrainers]);
 
-  const addTrainer = (event: FormEvent<HTMLFormElement>) => {
+  const addTrainer = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
     const name = String(formData.get("name")).trim();
     const availability = String(
       formData.get("availability"),
     ) as Availability;
-    const trainer: Trainer = {
-      id: Date.now(),
+    const trainerData = {
       name,
       email: String(formData.get("email")).trim(),
       specialty: String(formData.get("specialty")).trim(),
@@ -120,14 +139,33 @@ export default function Staff({
         .join(""),
       color: "lavender",
     };
-    setTrainers((current) => [trainer, ...current]);
-    setIsFormOpen(false);
-    onNotify("El entrenador se agregó correctamente.");
+    try {
+      const trainer =
+        apiMode === "remote"
+          ? await api.staff.create(trainerData)
+          : { id: Date.now(), ...trainerData };
+      setTrainers((current) => [trainer, ...current]);
+      setIsFormOpen(false);
+      onNotify("El entrenador se agregó correctamente.");
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo agregar el entrenador.",
+        "error",
+      );
+    }
   };
 
-  const deleteTrainer = (trainer: Trainer) => {
-    setTrainers((current) => current.filter((item) => item.id !== trainer.id));
-    onNotify(`${trainer.name} se eliminó del personal.`);
+  const deleteTrainer = async (trainer: Trainer) => {
+    try {
+      if (apiMode === "remote") await api.staff.remove(trainer.id);
+      setTrainers((current) => current.filter((item) => item.id !== trainer.id));
+      onNotify(`${trainer.name} se eliminó del personal.`);
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo eliminar al entrenador.",
+        "error",
+      );
+    }
   };
 
   return (

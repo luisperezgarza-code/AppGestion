@@ -3,14 +3,17 @@ import app from "./app.js";
 import { connectToDatabase } from "./config/database.js";
 
 const port = Number(process.env.PORT ?? 3000);
-const mongoUri = process.env.MONGODB_URI;
+const jwtSecret = process.env.JWT_SECRET;
 
-if (!mongoUri) {
-  throw new Error("Falta configurar la variable de entorno MONGODB_URI.");
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  throw new Error("PORT debe ser un puerto válido.");
+}
+if (!jwtSecret || jwtSecret.length < 32) {
+  throw new Error("Falta configurar JWT_SECRET con al menos 32 caracteres.");
 }
 
 try {
-  await connectToDatabase(mongoUri);
+  await connectToDatabase();
   app.listen(port, () => {
     console.log(`API AppGestion escuchando en http://localhost:${port}`);
   });

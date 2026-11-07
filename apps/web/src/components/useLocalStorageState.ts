@@ -7,8 +7,10 @@ export function useLocalStorageState<T>(
   initialValue: T,
   isValid: (value: unknown) => value is T,
   onError: Notify,
+  enabled = true,
 ): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => {
+    if (!enabled) return initialValue;
     try {
       const storedValue = window.localStorage.getItem(key);
       if (storedValue === null) return initialValue;
@@ -24,13 +26,14 @@ export function useLocalStorageState<T>(
   });
 
   useEffect(() => {
+    if (!enabled) return;
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch (error) {
       console.error(`No se pudo guardar el almacenamiento "${key}".`, error);
       onError("No se pudieron guardar los cambios en este dispositivo.", "error");
     }
-  }, [key, onError, value]);
+  }, [enabled, key, onError, value]);
 
   return [value, setValue];
 }

@@ -1,10 +1,12 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
 import { useLocalStorageState } from "./useLocalStorageState";
 import type { ToastType } from "./Toast";
+import { api, apiMode } from "../services/api";
+import { exportReport, type ExportFormat } from "../services/export";
 
 type Transaction = {
-  id: number;
+  id: number | string;
   client: string;
   concept: string;
   amount: number;
@@ -79,11 +81,31 @@ const initialTransactions: Transaction[] = [
   },
 ];
 
-const currencyFormatter = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 2,
-});
+function formatCurrency(amount: number) {
+  let currency = "MXN";
+  try {
+    const storedSettings = window.localStorage.getItem("appgestion.settings");
+    if (storedSettings) {
+      const settings: unknown = JSON.parse(storedSettings);
+      if (
+        typeof settings === "object" &&
+        settings !== null &&
+        "currency" in settings &&
+        typeof settings.currency === "string" &&
+        ["MXN", "USD", "EUR", "COP"].includes(settings.currency)
+      ) {
+        currency = settings.currency;
+      }
+    }
+  } catch (error) {
+    console.error("No se pudo leer la moneda configurada.", error);
+  }
+  return new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
 
 function formatDate(date: string) {
   return new Intl.DateTimeFormat("es-MX", {
@@ -119,16 +141,56 @@ function isTransactionArray(value: unknown): value is Transaction[] {
 
 export default function Finance({
   onNotify,
+  searchTerm = "",
 }: {
   onNotify: (message: string, type?: ToastType) => void;
+  searchTerm?: string;
 }) {
   const [transactions, setTransactions] = useLocalStorageState(
     "appgestion.transactions",
-    initialTransactions,
+    apiMode === "local" ? initialTransactions : [],
     isTransactionArray,
     onNotify,
+    apiMode === "local",
   );
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [isExportOpen, setIsExportOpen] = useState(false);
+
+  useEffect(() => {
+    if (apiMode !== "remote") return;
+    let active = true;
+    api.finance
+      .list()
+      .then((data) => {
+        if (active) setTransactions(data);
+      })
+      .catch((error: unknown) =>
+        onNotify(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las transacciones.",
+          "error",
+        ),
+      );
+    return () => {
+      active = false;
+    };
+  }, [onNotify, setTransactions]);
+
+  useEffect(() => {
+    setSearch(searchTerm);
+  }, [searchTerm]);
+
+  const filteredTransactions = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase("es-MX");
+    if (!query) return transactions;
+    return transactions.filter(
+      (transaction) =>
+        transaction.client.toLocaleLowerCase("es-MX").includes(query) ||
+        transaction.concept.toLocaleLowerCase("es-MX").includes(query),
+    );
+  }, [search, transactions]);
 
   const summary = useMemo(() => {
     const today = localDate();
@@ -149,28 +211,66 @@ export default function Finance({
     };
   }, [transactions]);
 
-  const registerPayment = (event: FormEvent<HTMLFormElement>) => {
+  const registerPayment = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const transaction: Transaction = {
-      id: Date.now(),
+    const transactionData = {
       client: String(formData.get("client")).trim(),
       concept: String(formData.get("concept")).trim(),
       amount: Number(formData.get("amount")),
       method: String(formData.get("method")),
       date: String(formData.get("date")),
-      status: "Completado",
+      status: "Completado" as const,
     };
-    setTransactions((current) => [transaction, ...current]);
-    setIsFormOpen(false);
-    onNotify("El pago se registró correctamente.");
+    try {
+      const transaction =
+        apiMode === "remote"
+          ? await api.finance.create(transactionData)
+          : { id: Date.now(), ...transactionData };
+      setTransactions((current) => [transaction, ...current]);
+      setIsFormOpen(false);
+      onNotify("El pago se registró correctamente.");
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo registrar el pago.",
+        "error",
+      );
+    }
   };
 
-  const deleteTransaction = (transaction: Transaction) => {
-    setTransactions((current) =>
-      current.filter((item) => item.id !== transaction.id),
+  const deleteTransaction = async (transaction: Transaction) => {
+    try {
+      if (apiMode === "remote") await api.finance.remove(transaction.id);
+      setTransactions((current) =>
+        current.filter((item) => item.id !== transaction.id),
+      );
+      onNotify(`La transacción de ${transaction.client} se eliminó.`);
+    } catch (error) {
+      onNotify(
+        error instanceof Error
+          ? error.message
+          : "No se pudo eliminar la transacción.",
+        "error",
+      );
+    }
+  };
+
+  const exportTransactions = (format: ExportFormat) => {
+    exportReport(
+      "transacciones-appgestion",
+      ["Cliente", "Concepto", "Monto", "Método de pago", "Fecha", "Estado"],
+      transactions.map((transaction) => [
+        transaction.client,
+        transaction.concept,
+        formatCurrency(transaction.amount),
+        transaction.method,
+        formatDate(transaction.date),
+        transaction.status,
+      ]),
+      format,
     );
-    onNotify(`La transacción de ${transaction.client} se eliminó.`);
+    setIsExportOpen(false);
+    onNotify(`Se exportó el historial de finanzas a ${format.toUpperCase()}.`);
   };
 
   return (
@@ -183,14 +283,40 @@ export default function Finance({
             Supervisa los ingresos y mantén tus pagos al día.
           </p>
         </div>
-        <button
-          className="primary-button"
-          onClick={() => setIsFormOpen(true)}
-          type="button"
-        >
-          <Icon name="plus" size={17} />
-          Registrar pago
-        </button>
+        <div className="module-heading-actions">
+          <div className="export-menu-wrap">
+            <button
+              aria-expanded={isExportOpen}
+              className="secondary-button export-trigger"
+              onClick={() => setIsExportOpen((open) => !open)}
+              type="button"
+            >
+              Exportar
+              <span className="filter-chevron" />
+            </button>
+            {isExportOpen && (
+              <div className="export-menu">
+                <button onClick={() => exportTransactions("csv")} type="button">
+                  Descargar CSV
+                </button>
+                <button
+                  onClick={() => exportTransactions("excel")}
+                  type="button"
+                >
+                  Descargar Excel
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            className="primary-button"
+            onClick={() => setIsFormOpen(true)}
+            type="button"
+          >
+            <Icon name="plus" size={17} />
+            Registrar pago
+          </button>
+        </div>
       </div>
 
       <section aria-label="Resumen financiero" className="finance-summary-grid">
@@ -199,7 +325,7 @@ export default function Finance({
             <Icon name="finance" size={19} />
           </span>
           <p>Ingresos totales del mes</p>
-          <strong>{currencyFormatter.format(summary.monthlyRevenue)}</strong>
+          <strong>{formatCurrency(summary.monthlyRevenue)}</strong>
           <span className="summary-caption">Pagos completados este mes</span>
         </article>
         <article className="panel finance-summary-card">
@@ -207,7 +333,7 @@ export default function Finance({
             <Icon name="clock" size={19} />
           </span>
           <p>Pagos pendientes</p>
-          <strong>{currencyFormatter.format(summary.pendingPayments)}</strong>
+          <strong>{formatCurrency(summary.pendingPayments)}</strong>
           <span className="summary-caption">
             {transactions.filter((item) => item.status === "Pendiente").length}{" "}
             pagos por confirmar
@@ -230,8 +356,20 @@ export default function Finance({
             <p>Consulta los pagos recientes de tu negocio.</p>
           </div>
           <span className="transaction-count">
-            {transactions.length} transacciones
+            {filteredTransactions.length} de {transactions.length} transacciones
           </span>
+        </div>
+        <div className="finance-table-search">
+          <label className="table-search">
+            <Icon name="search" size={17} />
+            <input
+              aria-label="Buscar transacciones"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por cliente o concepto..."
+              type="search"
+              value={search}
+            />
+          </label>
         </div>
         <div className="table-scroll">
           <table className="data-table finance-table">
@@ -247,12 +385,12 @@ export default function Finance({
               </tr>
             </thead>
             <tbody>
-              {transactions.map((transaction) => (
+              {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id}>
                   <td className="table-primary-cell">{transaction.client}</td>
                   <td className="muted-cell">{transaction.concept}</td>
                   <td className="amount-cell">
-                    {currencyFormatter.format(transaction.amount)}
+                    {formatCurrency(transaction.amount)}
                   </td>
                   <td>
                     <span className="payment-method">
@@ -286,11 +424,19 @@ export default function Finance({
                   </td>
                 </tr>
               ))}
+              {filteredTransactions.length === 0 && (
+                <tr>
+                  <td className="empty-table" colSpan={7}>
+                    No se encontraron transacciones.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         <div className="table-footer">
-          Mostrando <strong>{transactions.length}</strong> transacciones
+          Mostrando <strong>{filteredTransactions.length}</strong> de{" "}
+          <strong>{transactions.length}</strong> transacciones
         </div>
       </section>
 
