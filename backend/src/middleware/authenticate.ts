@@ -44,6 +44,18 @@ export const authenticate: RequestHandler = (request, response, next) => {
     .catch(next);
 };
 
+export const optionalAuthenticate: RequestHandler = (
+  request,
+  response,
+  next,
+) => {
+  if (!request.header("authorization")) {
+    next();
+    return;
+  }
+  authenticate(request, response, next);
+};
+
 export function authorize(...allowedRoles: UserRole[]): RequestHandler {
   return (request: Request, response, next) => {
     if (!request.authUserRole || !allowedRoles.includes(request.authUserRole)) {

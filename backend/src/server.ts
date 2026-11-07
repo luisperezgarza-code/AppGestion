@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./config/environment.js";
 import app from "./app.js";
 import { connectToDatabase } from "./config/database.js";
 

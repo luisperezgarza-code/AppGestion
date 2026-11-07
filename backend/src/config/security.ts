@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import bcrypt from "bcrypt";
 
 const tokenLifetimeSeconds = 8 * 60 * 60;
@@ -25,15 +25,23 @@ export function verifyPassword(password: string, passwordHash: string) {
 }
 
 export function signAccessToken(userId: string) {
+  return signPurposeToken(userId, null, tokenLifetimeSeconds);
+}
+
+export function signPurposeToken(
+  userId: string,
+  purpose: string | null,
+  lifetimeSeconds: number,
+) {
   const issuedAt = Math.floor(Date.now() / 1000);
   const header = base64Url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = base64Url(
-    JSON.stringify({
-      sub: userId,
-      iat: issuedAt,
-      exp: issuedAt + tokenLifetimeSeconds,
-    }),
-  );
+  const claims: Record<string, string | number> = {
+    sub: userId,
+    iat: issuedAt,
+    exp: issuedAt + lifetimeSeconds,
+  };
+  if (purpose) claims.purpose = purpose;
+  const payload = base64Url(JSON.stringify(claims));
   const content = `${header}.${payload}`;
   const signature = createHmac("sha256", getJwtSecret())
     .update(content)
@@ -42,6 +50,21 @@ export function signAccessToken(userId: string) {
 }
 
 export function verifyAccessToken(token: string): string | null {
+  const claims = verifySignedToken(token);
+  return claims && !claims.purpose ? claims.sub : null;
+}
+
+export function verifyPurposeToken(
+  token: string,
+  purpose: string,
+): string | null {
+  const claims = verifySignedToken(token);
+  return claims?.purpose === purpose ? claims.sub : null;
+}
+
+type TokenClaims = { sub: string; exp: number; purpose?: string };
+
+function verifySignedToken(token: string): TokenClaims | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [headerPart, payloadPart, signaturePart] = parts;
@@ -69,6 +92,9 @@ export function verifyAccessToken(token: string): string | null {
     ) {
       return null;
     }
+    if ("purpose" in payload && typeof payload.purpose !== "string") {
+      return null;
+    }
 
     const expected = createHmac("sha256", getJwtSecret())
       .update(`${headerPart}.${payloadPart}`)
@@ -80,8 +106,19 @@ export function verifyAccessToken(token: string): string | null {
     ) {
       return null;
     }
-    return payload.sub;
+    return {
+      sub: payload.sub,
+      exp: payload.exp,
+      purpose:
+        "purpose" in payload && typeof payload.purpose === "string"
+          ? payload.purpose
+          : undefined,
+    };
   } catch {
     return null;
   }
+}
+
+export function hashResetToken(token: string) {
+  return createHash("sha256").update(token).digest("hex");
 }

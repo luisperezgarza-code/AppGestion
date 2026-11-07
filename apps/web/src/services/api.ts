@@ -5,11 +5,24 @@ export type AppUser = {
   phone?: string;
   avatar?: string;
   role: "owner" | "receptionist" | "trainer";
+  twoFactorEnabled?: boolean;
+  twoFactorMethod?: "app" | null;
 };
 
 export type Session = {
   token: string;
   user: AppUser;
+};
+
+export type LoginChallenge = {
+  requiresTwoFactor: true;
+  challengeToken: string;
+  method: "app";
+};
+
+export type TwoFactorSetup = {
+  method: "app";
+  qrCode: string;
 };
 
 export type MemberRecord = {
@@ -63,9 +76,12 @@ const apiBaseUrl =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   "http://localhost:3000/api";
 const configuredMode = import.meta.env.VITE_API_MODE;
+const useLocalStorage = import.meta.env.VITE_USE_LOCAL_STORAGE;
 
 export const apiMode: "local" | "remote" =
-  configuredMode === "remote" ? "remote" : "local";
+  configuredMode === "remote" || (!configuredMode && useLocalStorage === "false")
+    ? "remote"
+    : "local";
 
 const tokenStorageKey = "appgestion.authToken";
 
@@ -224,14 +240,14 @@ type LocalAccount = {
 
 export const api = {
   auth: {
-    async login(email: string, password: string): Promise<Session> {
+    async login(email: string, password: string): Promise<Session | LoginChallenge> {
       if (apiMode === "remote") {
-        const session = await request<Session>("/auth/login", {
+        const result = await request<Session | LoginChallenge>("/auth/login", {
           method: "POST",
           body: JSON.stringify({ email, password }),
         });
-        setAccessToken(session.token);
-        return session;
+        if ("token" in result) setAccessToken(result.token);
+        return result;
       }
 
       const accounts = readLocal<LocalAccount[]>("appgestion.localAccounts", []);
@@ -254,6 +270,48 @@ export const api = {
       };
       setAccessToken(session.token);
       return session;
+    },
+    async forgotPassword(email: string) {
+      return request<{ message: string }>("/auth/forgot-password", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+    },
+    async resetPassword(token: string, password: string) {
+      return request<{ message: string }>("/auth/reset-password", {
+        method: "POST",
+        body: JSON.stringify({ token, password }),
+      });
+    },
+    async verifyLoginCode(code: string, challengeToken: string) {
+      const session = await request<Session>("/auth/2fa/verify", {
+        method: "POST",
+        body: JSON.stringify({ code, challengeToken }),
+      });
+      setAccessToken(session.token);
+      return session;
+    },
+    async setupTwoFactor(): Promise<TwoFactorSetup> {
+      return request<TwoFactorSetup>("/auth/2fa/setup", {
+        method: "POST",
+      });
+    },
+    async verifyTwoFactor(code: string) {
+      return request<{ enabled: true; method: "app" }>(
+        "/auth/2fa/verify",
+        { method: "POST", body: JSON.stringify({ code }) },
+      );
+    },
+    async disableTwoFactor(password: string, code: string) {
+      return request<{
+        enabled?: false;
+      }>(
+        "/auth/2fa/disable",
+        {
+          method: "POST",
+          body: JSON.stringify({ password, code }),
+        },
+      );
     },
     async register(
       name: string,

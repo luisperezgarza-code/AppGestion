@@ -61,6 +61,13 @@ function readProfile(user: AppUser): AccountProfile {
 export default function Account({ user, onUserUpdated, onNotify }: Props) {
   const [profile, setProfile] = useState(() => readProfile(user));
   const [isSaving, setIsSaving] = useState(false);
+  const [twoFactorSetup, setTwoFactorSetup] = useState<{
+    method: "app";
+    qrCode: string;
+  } | null>(null);
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableCode, setDisableCode] = useState("");
 
   const saveProfile = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -110,6 +117,60 @@ export default function Account({ user, onUserUpdated, onNotify }: Props) {
       );
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const startTwoFactorSetup = async () => {
+    try {
+      const setup = await api.auth.setupTwoFactor();
+      setTwoFactorSetup(setup);
+      setTwoFactorCode("");
+      onNotify("Escanea el código QR con tu aplicación autenticadora y confirma el código.");
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo iniciar la configuración.",
+        "error",
+      );
+    }
+  };
+
+  const verifyTwoFactorSetup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      const verified = await api.auth.verifyTwoFactor(twoFactorCode);
+      onUserUpdated({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorMethod: verified.method,
+      });
+      setTwoFactorSetup(null);
+      setTwoFactorCode("");
+      onNotify("La autenticación en dos pasos quedó activada.");
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo verificar el código.",
+        "error",
+      );
+    }
+  };
+
+  const disableTwoFactor = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    try {
+      await api.auth.disableTwoFactor(disablePassword, disableCode);
+      onUserUpdated({
+        ...user,
+        twoFactorEnabled: false,
+        twoFactorMethod: null,
+      });
+      setDisablePassword("");
+      setDisableCode("");
+      onNotify("La autenticación en dos pasos se desactivó.");
+    } catch (error) {
+      onNotify(
+        error instanceof Error ? error.message : "No se pudo cambiar la seguridad.",
+        "error",
+      );
     }
   };
 
@@ -274,6 +335,158 @@ export default function Account({ user, onUserUpdated, onNotify }: Props) {
               </button>
             </div>
           </form>
+        </section>
+
+        <section className="panel account-panel two-factor-panel">
+          <div className="module-panel-heading">
+            <div>
+              <h2>Autenticación en dos pasos</h2>
+              <p>Protege tu cuenta con un código adicional al iniciar sesión.</p>
+            </div>
+          </div>
+          {apiMode !== "remote" ? (
+            <p className="two-factor-note">
+              Conecta la aplicación con la API para configurar la verificación en dos pasos.
+            </p>
+          ) : user.twoFactorEnabled ? (
+            <>
+              <p className="two-factor-status">
+                Activa · Aplicación Authenticator
+              </p>
+              <form className="module-form account-form" onSubmit={disableTwoFactor}>
+                <div className="form-field">
+                  <label htmlFor="two-factor-disable-password">
+                    Confirma tu contraseña
+                  </label>
+                  <input
+                    autoComplete="current-password"
+                    id="two-factor-disable-password"
+                    onChange={(event) => setDisablePassword(event.target.value)}
+                    required
+                    type="password"
+                    value={disablePassword}
+                  />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="two-factor-disable-code">
+                    Código de verificación
+                  </label>
+                  <input
+                    autoComplete="one-time-code"
+                    id="two-factor-disable-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    minLength={6}
+                    onChange={(event) => setDisableCode(event.target.value)}
+                    pattern="[0-9]{6}"
+                    required
+                    value={disableCode}
+                  />
+                </div>
+                <div className="modal-actions">
+                  <button className="secondary-button" type="submit">
+                    Desactivar verificación
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="two-factor-note">
+                Usa Google Authenticator o Microsoft Authenticator para escanear
+                el código QR y generar códigos TOTP.
+              </p>
+              {!twoFactorSetup && (
+                <div className="modal-actions">
+                  <button
+                    className="primary-button"
+                    onClick={startTwoFactorSetup}
+                    type="button"
+                  >
+                    Configurar Authenticator
+                  </button>
+                </div>
+              )}
+              {twoFactorSetup && (
+                <div
+                  className="modal-backdrop"
+                  onMouseDown={() => setTwoFactorSetup(null)}
+                >
+                  <section
+                    aria-labelledby="two-factor-setup-title"
+                    aria-modal="true"
+                    className="form-modal"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    role="dialog"
+                  >
+                    <div className="modal-heading">
+                      <div>
+                        <p className="eyebrow">SEGURIDAD DE LA CUENTA</p>
+                        <h2 id="two-factor-setup-title">
+                          Configura la autenticación en dos pasos
+                        </h2>
+                      </div>
+                      <button
+                        aria-label="Cerrar configuración"
+                        className="modal-close"
+                        onClick={() => setTwoFactorSetup(null)}
+                        type="button"
+                      >
+                        <Icon name="close" size={19} />
+                      </button>
+                    </div>
+                    <div className="two-factor-setup">
+                      {twoFactorSetup.qrCode && (
+                        <div className="two-factor-qr">
+                          <img
+                            alt="Código QR de configuración de Authenticator"
+                            src={twoFactorSetup.qrCode}
+                          />
+                        </div>
+                      )}
+                      <p className="two-factor-note">
+                        Escanea este código QR con Google Authenticator o
+                        Microsoft Authenticator.
+                      </p>
+                      <form className="module-form" onSubmit={verifyTwoFactorSetup}>
+                        <div className="form-field">
+                          <label htmlFor="two-factor-setup-code">
+                            Código de 6 dígitos
+                          </label>
+                          <input
+                            autoComplete="one-time-code"
+                            autoFocus
+                            id="two-factor-setup-code"
+                            inputMode="numeric"
+                            maxLength={6}
+                            minLength={6}
+                            onChange={(event) =>
+                              setTwoFactorCode(event.target.value)
+                            }
+                            pattern="[0-9]{6}"
+                            required
+                            value={twoFactorCode}
+                          />
+                        </div>
+                        <div className="modal-actions">
+                          <button
+                            className="secondary-button"
+                            onClick={() => setTwoFactorSetup(null)}
+                            type="button"
+                          >
+                            Cancelar
+                          </button>
+                          <button className="primary-button" type="submit">
+                            Activar protección
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </section>
+                </div>
+              )}
+            </>
+          )}
         </section>
       </div>
     </section>

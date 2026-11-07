@@ -617,6 +617,44 @@
   gap: 12px;
 }
 
+.schedule-time-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.schedule-days-field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.schedule-days-field legend {
+  margin-bottom: 9px;
+  color: #77788d;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.schedule-days-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.schedule-day-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #77788d;
+  font-size: 9px;
+}
+
+.schedule-day-option input {
+  accent-color: #7664df;
+}
+
 .trainer-avatar {
   width: 43px;
   height: 43px;
@@ -686,6 +724,64 @@
 .trainer-schedule svg {
   flex: 0 0 auto;
   color: #9a9bad;
+}
+
+.two-factor-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.two-factor-note {
+  margin: 0;
+  color: #818296;
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.two-factor-status {
+  width: fit-content;
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: 20px;
+  background: #eaf7f0;
+  color: #398b65;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.two-factor-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.two-factor-qr {
+  padding: 10px;
+  border: 1px solid #ededf3;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.two-factor-qr img {
+  display: block;
+  width: 184px;
+  height: 184px;
+}
+
+.dark .two-factor-panel,
+.dark .two-factor-qr {
+  border-color: #303143;
+}
+
+.dark .two-factor-qr {
+  background: #fff;
+}
+
+.dark .two-factor-status {
+  background: #1b3225;
+  color: #8ed3a8;
 }
 
 @media (max-width: 760px) {

@@ -1748,6 +1748,37 @@ button:focus-visible {
   font-size: 10px;
 }
 
+.auth-success {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid #cfe9da;
+  border-radius: 6px;
+  background: #f0faf4;
+  color: #32835a;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.auth-text-link {
+  display: block;
+  width: fit-content;
+  margin: 14px auto 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6b5bd3;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.auth-text-link:hover {
+  color: #5140bc;
+  text-decoration: underline;
+}
+
 .auth-submit {
   width: 100%;
   justify-content: center;
@@ -1835,6 +1866,16 @@ button:focus-visible {
   border-color: #57363d;
   background: #38282e;
   color: #ff9a9f;
+}
+
+.dark .auth-success {
+  border-color: #315742;
+  background: #1b3225;
+  color: #8ed3a8;
+}
+
+.dark .auth-text-link {
+  color: #b7adff;
 }
 
 @media (max-width: 760px) {

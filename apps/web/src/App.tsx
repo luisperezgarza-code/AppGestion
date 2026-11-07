@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Account from "./components/Account";
 import Auth from "./components/Auth/Auth";
+import ResetPassword from "./components/Auth/ResetPassword";
 import Finance from "./components/Finance";
 import { Toast, type ToastNotification, type ToastType } from "./components/Toast";
 import Members from "./components/Members";
@@ -684,6 +685,16 @@ function App() {
                 value.user.role === "trainer")
                 ? value.user.role
                 : "owner",
+            twoFactorEnabled:
+              "twoFactorEnabled" in value.user &&
+              typeof value.user.twoFactorEnabled === "boolean"
+                ? value.user.twoFactorEnabled
+                : false,
+            twoFactorMethod:
+              "twoFactorMethod" in value.user &&
+              value.user.twoFactorMethod === "app"
+                ? value.user.twoFactorMethod
+                : null,
             phone:
               "phone" in value.user && typeof value.user.phone === "string"
                 ? value.user.phone
@@ -749,6 +760,10 @@ function App() {
     window.localStorage.removeItem("appgestion.session");
     setSession(null);
   };
+
+  if (window.location.pathname === "/reset-password") {
+    return <ResetPassword />;
+  }
 
   if (isCheckingSession) {
     return (

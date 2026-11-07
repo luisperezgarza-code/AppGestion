@@ -36,7 +36,9 @@ npm run dev:backend
 
 El panel web y la app Ionic se sirven con Vite. El servidor de la API escucha en el puerto `3000` por defecto.
 
-Inicia MySQL desde el panel de XAMPP y carga `backend/schema.sql` en phpMyAdmin o con el cliente MySQL. Después, copia `backend/.env.example` a `backend/.env`, configura los valores `MYSQL_*` y reemplaza `JWT_SECRET` por un secreto aleatorio de al menos 32 caracteres.
+Inicia MySQL desde el panel de XAMPP y carga `backend/schema.sql` en phpMyAdmin o con el cliente MySQL. Si la base ya existía, ejecuta en orden `backend/migrations/20261106_auth_security.sql` y `backend/migrations/20261106_authenticator_only.sql`. La segunda migración elimina las columnas heredadas del factor anterior y desactiva esas configuraciones para que las cuentas puedan iniciar sesión y volver a configurar Authenticator. Después, copia `backend/.env.example` a `backend/.env`, configura las credenciales de base de datos y reemplaza `JWT_SECRET` por un secreto aleatorio de al menos 32 caracteres.
+
+La autenticación en dos pasos usa únicamente TOTP con códigos QR compatibles con Google Authenticator y Microsoft Authenticator; no requiere servicios externos ni cuotas. La recuperación de contraseña envía un enlace por SMTP cuando `SMTP_HOST`, `SMTP_USER` y `SMTP_PASSWORD` están configurados; en desarrollo, el enlace se imprime en la consola del backend.
 
 El panel funciona por defecto con almacenamiento local. Para usar MySQL mediante la API, copia `apps/web/.env.example` a `apps/web/.env` y configura:
 
@@ -45,7 +47,7 @@ VITE_API_MODE=remote
 VITE_API_URL=http://localhost:3000/api
 ```
 
-La API ofrece autenticación en `/api/auth`, perfiles y gestión de usuarios en `/api/users`, además de recursos para `/api/members`, `/api/finance`, `/api/staff` y `/api/classes`. El primer registro crea al propietario inicial; después, el registro público se cierra y el propietario puede crear cuentas de recepcionista o entrenador desde `POST /api/users`. El propietario tiene acceso total, recepción puede gestionar miembros y finanzas, y los entrenadores pueden consultar personal y clases. El modo local es para desarrollo y guarda la cuenta y los datos en el navegador; configura el modo remoto para autenticar contra la API.
+La API ofrece autenticación y recuperación en `/api/auth`, incluidos `/forgot-password`, `/reset-password` y `/2fa/*`; perfiles y gestión de usuarios en `/api/users`; además de recursos para `/api/members`, `/api/finance`, `/api/staff` y `/api/classes`. El primer registro crea al propietario inicial; después, el registro público se cierra y el propietario puede crear cuentas de recepcionista o entrenador desde `POST /api/users`. El propietario tiene acceso total, recepción puede gestionar miembros y finanzas, y los entrenadores pueden consultar personal y clases. El modo local es para desarrollo y guarda la cuenta y los datos en el navegador; configura el modo remoto para autenticar contra la API.
 
 ## Compilación
 
