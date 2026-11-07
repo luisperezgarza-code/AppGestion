@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon } from "./Icon";
 import { useLocalStorageState } from "./useLocalStorageState";
 import type { ToastType } from "./Toast";
@@ -131,6 +131,87 @@ function currentAvailability(value: Trainer["availability"]): Availability {
   if (value === "En sesión") return "Disponible";
   if (value === "Fuera de horario") return "Fuera de servicio";
   return value;
+}
+
+const availabilityOptions: Availability[] = [
+  "Disponible",
+  "Vacaciones",
+  "Incapacidad",
+  "Fuera de servicio",
+];
+
+function TrainerStatusMenu({
+  trainer,
+  onChange,
+}: {
+  trainer: Trainer;
+  onChange: (trainer: Trainer, availability: Availability) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const availability = currentAvailability(trainer.availability);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isOpen]);
+
+  return (
+    <div className="trainer-status-menu" ref={menuRef}>
+      <button
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
+        aria-label={`Disponibilidad: ${availability}. Cambiar disponibilidad de ${trainer.name}`}
+        className={`status-badge trainer-status-trigger ${availabilityClass[availability]}`}
+        onClick={() => setIsOpen((open) => !open)}
+        type="button"
+      >
+        <span />
+        {availability}
+        <span aria-hidden="true" className="trainer-status-chevron" />
+      </button>
+      {isOpen && (
+        <div
+          aria-label={`Disponibilidad de ${trainer.name}`}
+          className="trainer-status-options"
+          role="menu"
+        >
+          {availabilityOptions.map((option) => (
+            <button
+              aria-checked={availability === option}
+              className={`trainer-status-option ${availabilityClass[option]}`}
+              key={option}
+              onClick={() => {
+                setIsOpen(false);
+                if (availability !== option) onChange(trainer, option);
+              }}
+              role="menuitemradio"
+              type="button"
+            >
+              <span className="trainer-status-option-dot" />
+              {option}
+              {availability === option && (
+                <span aria-hidden="true" className="trainer-status-selected">
+                  ✓
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function isTrainerArray(value: unknown): value is Trainer[] {
@@ -398,27 +479,10 @@ export default function Staff({
                 {trainer.initials}
               </span>
               <span className="trainer-card-actions">
-                <label
-                  className={`status-badge trainer-status-control ${availabilityClass[currentAvailability(trainer.availability)]}`}
-                >
-                  <span />
-                  <select
-                    aria-label={`Cambiar disponibilidad de ${trainer.name}`}
-                    className="trainer-status-select"
-                    onChange={(event) =>
-                      changeAvailability(
-                        trainer,
-                        event.target.value as Availability,
-                      )
-                    }
-                    value={currentAvailability(trainer.availability)}
-                  >
-                    <option>Disponible</option>
-                    <option>Vacaciones</option>
-                    <option>Incapacidad</option>
-                    <option>Fuera de servicio</option>
-                  </select>
-                </label>
+                <TrainerStatusMenu
+                  onChange={changeAvailability}
+                  trainer={trainer}
+                />
                 <button
                   aria-label={`Editar a ${trainer.name}`}
                   className="row-action"

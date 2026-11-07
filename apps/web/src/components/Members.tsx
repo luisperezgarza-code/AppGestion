@@ -389,10 +389,39 @@ export default function Members({
                   </td>
                   <td className="muted-cell">{formatDate(member.expiryDate)}</td>
                   <td>
-                    <span className={`status-badge ${statusClass[member.status]}`}>
-                      <span />
-                      {member.status}
-                    </span>
+                    <div className="member-status-control">
+                      <button
+                        aria-label={
+                          member.status === "Activo"
+                            ? `Desactivar ${member.name}`
+                            : `Activar ${member.name}`
+                        }
+                        aria-pressed={member.status === "Activo"}
+                        className={`member-toggle transition-all duration-300 ${
+                          member.status === "Activo" ? "is-active" : ""
+                        }`}
+                        onClick={() => toggleMemberStatus(member)}
+                        title={
+                          member.status === "Activo"
+                            ? "Desactivar miembro"
+                            : "Activar miembro"
+                        }
+                        type="button"
+                      >
+                        <span className="member-toggle-track">
+                          <span className="member-toggle-thumb" />
+                        </span>
+                        <span className="member-toggle-label">
+                          {member.status === "Activo" ? "Activo" : "Inactivo"}
+                        </span>
+                      </button>
+                      {member.status === "Pendiente de Pago" && (
+                        <span className={`status-badge ${statusClass[member.status]}`}>
+                          <span />
+                          Pendiente de Pago
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div className="row-actions">
@@ -404,19 +433,6 @@ export default function Members({
                         type="button"
                       >
                         <Icon name="edit" size={16} />
-                      </button>
-                      <button
-                        aria-label={`Cambiar estado de ${member.name}`}
-                        className="row-action"
-                        onClick={() => toggleMemberStatus(member)}
-                        title={
-                          member.status === "Activo"
-                            ? "Desactivar miembro"
-                            : "Activar miembro"
-                        }
-                        type="button"
-                      >
-                        <Icon name="toggle" size={17} />
                       </button>
                       <button
                         aria-label={`Eliminar ${member.name}`}
