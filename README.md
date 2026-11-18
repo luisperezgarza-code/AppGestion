@@ -1,56 +1,69 @@
 # AppGestion
 
-Plataforma de gestión de gimnasios con un panel de administración web, una app móvil para clientes y entrenadores, y una API REST.
+Sistema de gestión para gimnasios dividido en panel administrativo web, app móvil para clientes/entrenadores y API REST.
 
-## Estructura
+## Stack y estructura
 
 ```text
 apps/
-  web/       Panel de administración: React, Vite y Tailwind CSS
-  mobile/    App móvil: Ionic con React
-backend/     API REST: Node.js, Express y MySQL (mysql2)
+  web/       Panel de administración (React, Vite, Tailwind CSS)
+  mobile/    App móvil para clientes y entrenadores (Ionic, React)
+backend/     API REST (Node.js, Express, MySQL con mysql2) 
 ```
+Cómo funciona
+Roles: El primer registro crea al propietario y bloquea el registro público. Desde ahí, el propietario da de alta cuentas de recepcionista o entrenador (POST /api/users) y puede restablecer contraseñas del personal. Recepción maneja miembros y finanzas; entrenadores y clientes consultan horarios y clases.
 
-## Requisitos
+Autenticación: Login con JWT y 2FA opcional por TOTP (código QR compatible con Google Authenticator y Microsoft Authenticator, sin servicios de terceros).
 
-- Node.js 20 o superior y npm
-- MySQL 8.0 o posterior (XAMPP incluye MariaDB compatible)
+Modo local vs remoto: Por defecto el panel guarda datos en el navegador para pruebas rápidas. Para conectarlo a MySQL vía API se configura el .env del frontend.
 
-## Instalación
+Requisitos
+Node.js 20+ y npm
 
-Desde la raíz del proyecto:
+MySQL 8.0+ (o MariaDB desde XAMPP)
 
-```bash
+Instalación y configuración
+Instala las dependencias desde la raíz:
+
+Bash
 npm install
-```
+Levanta MySQL en XAMPP e importa backend/schema.sql. Si ya tenías una base creada, corre las migraciones en orden:
 
-## Desarrollo
+backend/migrations/20261106_auth_security.sql
 
-Ejecuta cada aplicación en una terminal independiente:
+backend/migrations/20261106_authenticator_only.sql
 
-```bash
+backend/migrations/20261106_admin_passwords_and_staff_status.sql
+
+Configura las variables de entorno:
+
+Copia backend/.env.example a backend/.env, pon los datos de tu base de datos y genera un JWT_SECRET de mínimo 32 caracteres.
+
+Si vas a usar la API desde el panel web, copia apps/web/.env.example a apps/web/.env y agrega:
+
+Fragmento de código
+VITE_API_MODE=remote
+VITE_API_URL=http://localhost:3000/api
+Ejecución en local
+Levanta cada servicio en una terminal distinta (el servidor corre en el puerto 3000 por defecto):
+
+Bash
 npm run dev:web
 npm run dev:mobile
 npm run dev:backend
-```
+Endpoints principales
+/api/auth — Registro inicial, login y 2FA
 
-El panel web y la app Ionic se sirven con Vite. El servidor de la API escucha en el puerto `3000` por defecto.
+/api/users — Perfiles y alta de personal
 
-Inicia MySQL desde el panel de XAMPP y carga `backend/schema.sql` en phpMyAdmin o con el cliente MySQL. Si la base ya existía, ejecuta en orden `backend/migrations/20261106_auth_security.sql`, `backend/migrations/20261106_authenticator_only.sql` y `backend/migrations/20261106_admin_passwords_and_staff_status.sql`. Las migraciones actualizan MFA, eliminan campos obsoletos y adaptan la disponibilidad del personal. Después, copia `backend/.env.example` a `backend/.env`, configura las credenciales de base de datos y reemplaza `JWT_SECRET` por un secreto aleatorio de al menos 32 caracteres.
+/api/members — Gestión de socios
 
-La autenticación en dos pasos usa únicamente TOTP con códigos QR compatibles con Google Authenticator y Microsoft Authenticator; no requiere servicios externos ni cuotas. El propietario puede restablecer contraseñas de los entrenadores desde sus tarjetas en el módulo de Personal.
+/api/finance — Pagos y finanzas
 
-El panel funciona por defecto con almacenamiento local. Para usar MySQL mediante la API, copia `apps/web/.env.example` a `apps/web/.env` y configura:
+/api/staff — Personal y disponibilidad
 
-```env
-VITE_API_MODE=remote
-VITE_API_URL=http://localhost:3000/api
-```
+/api/classes — Clases y horarios
 
-La API ofrece autenticación en `/api/auth` con 2FA opcional; perfiles y gestión de usuarios en `/api/users`; además de recursos para `/api/members`, `/api/finance`, `/api/staff` y `/api/classes`. El primer registro crea al propietario inicial; después, el registro público se cierra y el propietario puede crear cuentas de recepcionista o entrenador desde `POST /api/users`. El propietario tiene acceso total, recepción puede gestionar miembros y finanzas, y los entrenadores pueden consultar personal y clases. El modo local es para desarrollo y guarda la cuenta y los datos en el navegador; configura el modo remoto para autenticar contra la API.
-
-## Compilación
-
-```bash
+Build
+Bash
 npm run build
-```
